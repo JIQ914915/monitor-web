@@ -148,6 +148,7 @@
             :unit="m.unit"
             :color="m.color"
             :points="trendPoints[m.code] ?? []"
+            :error="trendErrors[m.code]"
             :trigger-ts="triggerTs"
             :recovery-ts="recoveryTs"
             :change="trendChange[m.code]"
@@ -524,6 +525,8 @@ function setChartRef(code: string, el: unknown) {
 }
 
 const trendPoints = reactive<Record<string, TrendPoint[]>>({})
+/** 按指标记录趋势接口失败；成功空数组仍由图表显示“窗口内暂无数据”。 */
+const trendErrors = reactive<Record<string, string | undefined>>({})
 /** 触发前后均值变化率（%），衡量指标在告警时刻附近的异动幅度 */
 const trendChange = reactive<Record<string, number | null>>({})
 
@@ -549,10 +552,11 @@ async function fetchTrends() {
   try {
     const instanceId = ev.value.instanceId
     await Promise.all(trendMetrics.value.map(async m => {
-      const hourly = HOURLY_CODES.has(m.code)
+      const hourly = m.frequency ? m.frequency === '1h' : HOURLY_CODES.has(m.code)
       const win = hourly ? HOURLY_WINDOW_MS : WINDOW_MS
       const from = triggerTs.value - win
       const to = Math.min(Date.now(), triggerTs.value + win)
+      trendErrors[m.code] = undefined
       try {
         const res = await getMetricTrend(instanceId, m.code, from, to, hourly ? '1h' : '1m')
         const points = m.toGB ? toGBPoints(res.points ?? []) : (res.points ?? [])
@@ -561,6 +565,7 @@ async function fetchTrends() {
       } catch {
         trendPoints[m.code] = []
         trendChange[m.code] = null
+        trendErrors[m.code] = '趋势查询失败，请稍后重试或检查采集服务'
       }
     }))
   } finally {
@@ -629,7 +634,7 @@ async function fetchComparison() {
     const instanceId = ev.value.instanceId
     const offset = comparisonPeriod.value === 'yesterday' ? 24 * 3600_000 : 7 * 24 * 3600_000
     const rows = await Promise.all(trendMetrics.value.map(async m => {
-      const hourly = HOURLY_CODES.has(m.code)
+      const hourly = m.frequency ? m.frequency === '1h' : HOURLY_CODES.has(m.code)
       const win = hourly ? HOURLY_WINDOW_MS : WINDOW_MS
       const freq = hourly ? '1h' as const : '1m' as const
       const curPoints = trendPoints[m.code] ?? []

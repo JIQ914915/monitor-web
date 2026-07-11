@@ -22,6 +22,8 @@ export interface DrilldownMetric {
   color: string
   /** 字节类指标换算为 GB 展示 */
   toGB?: boolean
+  /** 指标实际存储频率；画像未声明时由页面按兼容规则推断 */
+  frequency?: '1m' | '1h'
 }
 
 export interface DrilldownCause {
@@ -64,6 +66,8 @@ export const STEP_LINKS: Record<string, string> = {
   performance: '/monitor/mysql/performance',
   scenario: '/monitor/mysql/scenario',
   pg_realtime: '/monitor/pg/realtime',
+  pg_replication: '/monitor/pg/replication',
+  pg_performance: '/monitor/pg/performance',
   pg_scenario: '/monitor/pg/scenario',
   knowledge: '/system/knowledge',
   collector: '/system/collector'
@@ -96,7 +100,8 @@ export function toDrilldownProfile(vo?: DrilldownProfileVo | null): DrilldownPro
         label: str(m.label, m.code as string),
         unit: str(m.unit),
         color: str(m.color, '#0C7C97'),
-        toGB: m.toGB === true
+        toGB: m.toGB === true,
+        frequency: m.frequency === '1m' || m.frequency === '1h' ? m.frequency : undefined
       })),
     causes: (vo.causes ?? [])
       .filter(c => typeof c.cause === 'string' && c.cause)

@@ -4,7 +4,8 @@
       <span class="dd-chart-label">{{ label }}</span>
       <el-tag v-if="changeTag" :type="changeTag.type" size="small" effect="plain">{{ changeTag.text }}</el-tag>
     </div>
-    <el-empty v-if="!points.length" description="窗口内暂无数据" :image-size="48" />
+    <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
+    <el-empty v-else-if="!points.length" description="窗口内暂无数据" :image-size="48" />
     <div v-else ref="chartRef" class="dd-chart-body" />
   </div>
 </template>
@@ -27,13 +28,15 @@ const props = withDefaults(defineProps<{
   unit: string
   color: string
   points: TrendPoint[]
+  /** 趋势接口请求失败；与请求成功但点集为空分开展示。 */
+  error?: string
   /** 告警触发时间（红色虚线标记） */
   triggerTs: number
   /** 恢复时间（绿色虚线标记，未恢复不传） */
   recoveryTs?: number | null
   /** 触发前后均值变化率（%），null 表示无法计算 */
   change?: number | null
-}>(), { recoveryTs: null, change: null })
+}>(), { error: undefined, recoveryTs: null, change: null })
 
 const chartRef = ref<HTMLDivElement>()
 
@@ -156,5 +159,8 @@ defineExpose({ getImage })
 }
 .dd-chart :deep(.el-empty) {
   padding: 12px 0;
+}
+.dd-chart :deep(.el-alert) {
+  margin: 18px 0;
 }
 </style>
