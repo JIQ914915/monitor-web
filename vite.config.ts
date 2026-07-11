@@ -11,11 +11,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       AutoImport({
-        resolvers: [ElementPlusResolver()],
+        resolvers: [ElementPlusResolver({ importStyle: false })],
         imports: ['vue', 'vue-router', 'pinia']
       }),
       Components({
-        resolvers: [ElementPlusResolver()]
+        resolvers: [ElementPlusResolver({ importStyle: false })]
       })
     ],
     resolve: {
@@ -34,7 +34,6 @@ export default defineConfig(({ mode }) => {
       // 5173 落在本机 Windows 保留端口段 5076-5175（Hyper-V 等），会 EACCES
       port: 3000,
       proxy: {
-        // 代理整个 /api 前缀（含 /api/v1、日后 /api/v2），目标为 monitor-admin（无 context-path）
         '/api': {
           target: env.VITE_API_TARGET || 'http://localhost:8080',
           changeOrigin: true
