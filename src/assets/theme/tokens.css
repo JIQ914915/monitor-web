@@ -1,0 +1,190 @@
+/* 控制室主题 · 设计 Token（沿用原型 prototype/assets/css/custom.css）
+ * 主题可配项均映射到 CSS 变量，运行时改写即换肤（见 stores/theme）。
+ * 严重度语义色 --sev-* 锁定，仅随官方色盲预设联动（方案 §8.5）。 */
+:root {
+  /* 品牌 / 信号主色（可配） */
+  --signal: #0C7C97;
+  --signal-strong: #095E73;
+  --signal-soft: #E7F2F5;
+
+  /* 墨色 */
+  --ink: #0E1A2B;
+  --ink-soft: #33455B;
+
+  /* 画布 / 卡片 */
+  --canvas: #F5F6F8;
+  --surface: #FFFFFF;
+  --line: #E8ECF0;
+  --muted: #64748B;
+  --faint: #94A3B8;
+  --track: #F0F2F5;
+  --scrollbar-track: rgba(148, 163, 184, 0.16);
+  --scrollbar-thumb: rgba(100, 116, 139, 0.45);
+  --scrollbar-thumb-hover: rgba(71, 85, 105, 0.62);
+  --scrollbar-size: 10px;
+
+  /* 严重度语义色（锁定） */
+  --sev-ok: #15A36A;
+  --sev-info: #2D7FF0;
+  --sev-warn: #E08600;
+  --sev-crit: #E5484D;
+  --sev-fatal: #B42318;
+  --sev-offline: #6B7280;
+
+  /* 健康等级（随色盲预设联动） */
+  --status-excellent: var(--sev-ok);
+  --status-good: var(--signal);
+  --status-warning: var(--sev-warn);
+  --status-critical: var(--sev-crit);
+  --status-offline: var(--sev-offline);
+
+  /* 圆角（可配档位） */
+  --radius-sm: 6px;
+  --radius-base: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(14, 26, 43, 0.05);
+  --shadow-base: 0 2px 8px rgba(14, 26, 43, 0.07);
+  --shadow-lg: 0 12px 32px rgba(14, 26, 43, 0.14);
+  --shadow-hover: 0 8px 22px rgba(14, 26, 43, 0.12);
+
+  /* 字体 */
+  --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Space Grotesk', 'Noto Sans SC', var(--font-sans);
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* 基准字号（可配） */
+  --font-size-base: 14px;
+
+  /* 界面密度（可配：紧凑/默认/宽松） */
+  --density-gap: 16px;
+  --density-control-h: 32px;
+  /* 主内容区外层内边距 + 卡片内边距 */
+  --content-pad: 12px;
+  --card-pad: 14px;
+
+  /* Element Plus 变量对接（与本产品 token 同源） */
+  --el-color-primary: var(--signal);
+  --el-color-success: var(--sev-ok);
+  --el-color-warning: var(--sev-warn);
+  --el-color-danger: var(--sev-crit);
+  --el-color-error: var(--sev-crit);
+  --el-color-info: var(--sev-offline);
+  --el-font-family: var(--font-sans);
+  --el-border-radius-base: var(--radius-base);
+  /* 卡片 / 弹窗 / 消息框圆角与主题档位同源，保证卡片、表单、表格观感统一 */
+  --el-card-border-radius: var(--radius-base);
+  --el-dialog-border-radius: var(--radius-base);
+  --el-messagebox-border-radius: var(--radius-base);
+  --el-popover-border-radius: var(--radius-sm);
+}
+
+/* 界面密度档位 */
+:root[data-density='compact'] {
+  --density-gap: 10px;
+  --density-control-h: 28px;
+  --content-pad: 8px;
+  --card-pad: 10px;
+}
+:root[data-density='loose'] {
+  --density-gap: 22px;
+  --density-control-h: 38px;
+  --content-pad: 16px;
+  --card-pad: 18px;
+}
+
+/* 卡片内边距随密度联动（覆盖 Element 默认 20px；tokens.css 在 element-plus 之后加载） */
+.el-card__body {
+  padding: var(--card-pad);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+/* 全局滚动条：兼容浅/深色主题（原生滚动条 + Firefox） */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: var(--radius-pill);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Element Plus 自定义滚动条统一样式 */
+.el-scrollbar__bar.is-vertical {
+  width: var(--scrollbar-size);
+  right: 2px;
+}
+
+.el-scrollbar__bar.is-horizontal {
+  height: var(--scrollbar-size);
+}
+
+.el-scrollbar__thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: var(--radius-pill);
+  transition: background-color 0.2s ease;
+}
+
+.el-scrollbar__bar:hover .el-scrollbar__thumb {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+#app {
+  height: 100%;
+}
+
+/* 卡片标题（el-card header 内统一使用，无需各页面重复定义） */
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+/* 无障碍：尊重系统“减少动效”（呼应原型 prefers-reduced-motion） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

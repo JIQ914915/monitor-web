@@ -1,0 +1,103 @@
+/* 暗色模式：html.dark 时覆盖 token（契合值守大屏/NOC，方案 §8.5）
+ * 严重度语义色保持不变以确保告警可读性。 */
+html.dark {
+  --ink: #E6EDF6;
+  --ink-soft: #AEBED2;
+  --canvas: #070D18;
+  --surface: #0F1A2D;
+  --line: #2A3B5C;
+  --muted: #8A9CB8;
+  --faint: #5C6E8A;
+  --track: #122036;
+  --scrollbar-track: rgba(28, 43, 69, 0.72);
+  --scrollbar-thumb: rgba(138, 156, 184, 0.46);
+  --scrollbar-thumb-hover: rgba(173, 191, 219, 0.64);
+  --signal-soft: #102841;
+  --menu-active-bg: #133457;
+  --menu-active-text: #DCEBFB;
+  --row-active-bg: #133457;
+  --row-hover-bg: #10263F;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-hover: 0 8px 22px rgba(0, 0, 0, 0.45);
+
+  /* Element Plus 暗色基础变量对接 */
+  --el-bg-color: var(--surface);
+  --el-bg-color-page: var(--canvas);
+  --el-bg-color-overlay: var(--surface);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink-soft);
+  --el-border-color: var(--line);
+  --el-border-color-light: var(--line);
+  --el-border-color-lighter: #344A70;
+  --el-border-color-extra-light: #3A527C;
+  --el-fill-color: #13223A;
+  --el-fill-color-light: #162844;
+  --el-fill-color-lighter: #1A2D4A;
+  --el-fill-color-extra-light: #1F3454;
+  --el-fill-color-blank: var(--surface);
+  --el-menu-bg-color: var(--surface);
+  --el-menu-text-color: var(--ink-soft);
+  --el-menu-hover-bg-color: var(--track);
+  --el-menu-active-color: var(--menu-active-text);
+  --el-table-tr-bg-color: var(--surface);
+  --el-table-row-hover-bg-color: var(--row-hover-bg);
+  --el-table-current-row-bg-color: var(--row-active-bg);
+  --el-table-header-bg-color: #172744;
+  --el-table-border-color: var(--line);
+  --el-mask-color: rgba(2, 8, 20, 0.78);
+}
+
+/* 菜单选中态统一：侧边 + 顶部 */
+html.dark .el-menu-item.is-active,
+html.dark .el-sub-menu__title.is-active {
+  background-color: var(--menu-active-bg) !important;
+  color: var(--menu-active-text) !important;
+}
+
+/* 列表选中行统一：current-row 与 hover 共用暗色体系 */
+html.dark .el-table__body tr.current-row > td.el-table__cell {
+  background-color: var(--row-active-bg) !important;
+}
+
+html.dark .el-table__body tr:hover > td.el-table__cell {
+  background-color: var(--row-hover-bg) !important;
+}
+
+/* 表格线条/分割线增强：确保肉眼可见 */
+html.dark .el-table td.el-table__cell,
+html.dark .el-table th.el-table__cell.is-leaf {
+  border-bottom-color: #344A70 !important;
+}
+
+html.dark .el-table--border .el-table__cell,
+html.dark .el-table--border th.el-table__cell.is-leaf {
+  border-right-color: #344A70 !important;
+}
+
+html.dark .el-table--border::before,
+html.dark .el-table--group::after,
+html.dark .el-table::before,
+html.dark .el-table::after {
+  background-color: #344A70 !important;
+}
+
+/* 色弱友好预设：整体替换严重度配色（不允许逐色自由改，方案 §8.5）
+ * 采用 Okabe-Ito 色觉友好色板，并同步 Element Plus 语义色，使标签/提示/按钮全局联动。 */
+html[data-palette='colorblind'] {
+  --sev-ok: #0072B2;
+  --sev-info: #56B4E9;
+  --sev-warn: #E69F00;
+  --sev-crit: #D55E00;
+  --sev-fatal: #9A2B00;
+  --sev-offline: #6B7280;
+
+  /* Element Plus 语义色联动（标签/按钮/Alert 等整体跟随） */
+  --el-color-success: var(--sev-ok);
+  --el-color-warning: var(--sev-warn);
+  --el-color-danger: var(--sev-crit);
+  --el-color-error: var(--sev-crit);
+  --el-color-info: var(--sev-offline);
+}

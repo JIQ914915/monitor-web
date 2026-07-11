@@ -1,0 +1,25 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+
+# 自动生成的类型声明
+auto-imports.d.ts
+components.d.ts
+
+# 编辑器
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
