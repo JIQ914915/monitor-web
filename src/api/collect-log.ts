@@ -1,29 +1,34 @@
 import request from './request'
-import type { CollectLogRecord, CollectTaskSummary } from '@/types'
+import type { CollectLogRecord, CollectTaskStats, CollectTaskSummary, PageResult } from '@/types'
 
 export interface CollectTaskQuery {
+  keyword?: string
   dbType?: string
   frequency?: string
   /** running / stopped / error */
   status?: string
+  pageNum?: number
+  pageSize?: number
 }
 
-/**
- * 采集任务列表：每个实例 × 频率一行，含最新采集状态与 24h 成功率。
- * 对应后端 POST /collect-logs/tasks
- */
+/** 数据库实例/主机采集任务后台分页。 */
 export function listCollectTasks(data?: CollectTaskQuery) {
-  return request<CollectTaskSummary[]>({ url: '/v1/collect-logs/tasks', method: 'post', data })
+  return request<PageResult<CollectTaskSummary>>({ url: '/v1/collect-logs/tasks', method: 'post', data })
 }
 
-/**
- * 单实例单频率的历史采集日志（倒序，默认 50 条，最大 200）。
- * 对应后端 POST /collect-logs/query
- */
-export function listCollectLogs(instanceId: number, frequency: string, limit = 50) {
-  return request<CollectLogRecord[]>({
+/** 当前任务过滤条件下的频率和状态统计。 */
+export function getCollectTaskStats(data?: CollectTaskQuery) {
+  return request<CollectTaskStats>({ url: '/v1/collect-logs/tasks/stats', method: 'post', data })
+}
+
+/** 单实例或单主机、单频率的历史采集日志后台分页。 */
+export function listCollectLogs(task: CollectTaskSummary, pageNum = 1, pageSize = 20) {
+  const target = task.targetType === 'host'
+    ? { hostId: task.hostId }
+    : { instanceId: task.instanceId }
+  return request<PageResult<CollectLogRecord>>({
     url: '/v1/collect-logs/query',
     method: 'post',
-    data: { instanceId, frequency, limit }
+    data: { ...target, frequency: task.frequency, pageNum, pageSize }
   })
 }

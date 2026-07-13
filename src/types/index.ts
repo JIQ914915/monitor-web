@@ -322,9 +322,11 @@ export interface SysDictType {
   updateTime?: string
 }
 
-/** 采集任务摘要（每个实例 × 频率组合一条，/collect-logs/tasks 接口返回） */
+/** 采集任务摘要（数据库实例或主机 × 频率组合一条） */
 export interface CollectTaskSummary {
+  targetType: 'instance' | 'host'
   instanceId: number
+  hostId?: number
   instanceName: string
   dbType: string
   dbVersion?: string
@@ -347,10 +349,21 @@ export interface CollectTaskSummary {
   success24h: number
 }
 
+/** 采集任务统计（与任务分页使用相同过滤条件） */
+export interface CollectTaskStats {
+  total: number
+  total1m: number
+  total1h: number
+  total1d: number
+  running: number
+  stopped: number
+  error: number
+}
 /** 采集历史日志记录（/collect-logs 接口返回，对应 collect_log 表） */
 export interface CollectLogRecord {
   id: number
   instanceId: number
+  hostId?: number
   frequency: string
   collectTime: string
   durationMs: number

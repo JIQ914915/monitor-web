@@ -10,14 +10,17 @@
 
     <!-- 任务列表 -->
     <ProTable
-      :data="filteredList"
+      :data="taskList"
       :columns="columns"
       :loading="loading"
+      :total="taskTotal"
+      v-model:page-num="taskPage.pageNum"
+      v-model:page-size="taskPage.pageSize"
       :show-add="false"
-      :show-pagination="false"
       :operation-width="80"
-      @search="loadTasks"
+      @search="handleSearch"
       @reset="handleReset"
+      @page-change="loadTasks"
     >
       <template #search>
         <el-form-item label="实例名称">
@@ -121,11 +124,6 @@
       :destroy-on-close="false"
     >
       <div class="log-toolbar">
-        <el-select v-model="logLimit" style="width: 120px" @change="loadLogs">
-          <el-option label="最近 50 条" :value="50" />
-          <el-option label="最近 100 条" :value="100" />
-          <el-option label="最近 200 条" :value="200" />
-        </el-select>
         <div class="spacer" />
         <el-button :icon="Refresh" @click="loadLogs" :loading="logLoading">刷新</el-button>
       </div>
@@ -178,6 +176,19 @@
         </el-table-column>
       </el-table>
 
+
+      <div v-if="logTotal > 0" class="log-pagination">
+        <el-pagination
+          v-model:current-page="logPage.pageNum"
+          v-model:page-size="logPage.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="logTotal"
+          layout="total, sizes, prev, pager, next"
+          background
+          @size-change="handleLogSizeChange"
+          @current-change="loadLogs"
+        />
+      </div>
       <div v-if="logList.length === 0 && !logLoading" class="log-empty">
         <el-empty description="暂无采集记录" />
       </div>
@@ -186,17 +197,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { CircleCheck, CircleClose, Refresh } from '@element-plus/icons-vue'
 import ProTable from '@/components/ProTable/index.vue'
 import type { TableColumn } from '@/components/ProTable/types'
 import StatCard from '@/components/StatCard.vue'
 import { fmtMs as formatDuration, formatDateTime as formatTime } from '@/utils/format'
-import type { CollectLogRecord, CollectTaskSummary } from '@/types'
-import { listCollectLogs, listCollectTasks } from '@/api/collect-log'
+import type { CollectLogRecord, CollectTaskStats, CollectTaskSummary } from '@/types'
+import { getCollectTaskStats, listCollectLogs, listCollectTasks } from '@/api/collect-log'
 
 const columns: TableColumn[] = [
-  { label: '实例', minWidth: 180, slot: 'col-instance', showOverflowTooltip: false },
+  { label: '采集对象', minWidth: 180, slot: 'col-instance', showOverflowTooltip: false },
   { label: '类型/版本', width: 120, slot: 'col-dbType', showOverflowTooltip: false },
   { label: '频率', width: 120, slot: 'col-frequency', showOverflowTooltip: false },
   { label: '状态', width: 95, align: 'center', slot: 'col-status', showOverflowTooltip: false },
@@ -207,61 +218,66 @@ const columns: TableColumn[] = [
   { label: '近24h成功率', width: 140, slot: 'col-successRate', showOverflowTooltip: false },
 ]
 
-// ── 任务列表 ────────────────────────────────────────────────────────────────
+// ── 任务列表（后台分页）────────────────────────────────────────────────────
 
 const loading = ref(false)
-const allTasks = ref<CollectTaskSummary[]>([])
-
+const taskList = ref<CollectTaskSummary[]>([])
+const taskTotal = ref(0)
+const taskPage = reactive({ pageNum: 1, pageSize: 20 })
 const filterKeyword = ref('')
 const filterFrequency = ref('')
 const filterStatus = ref('')
-
-const filteredList = computed(() => {
-  const kw = filterKeyword.value.trim().toLowerCase()
-  return allTasks.value.filter((t) => {
-    if (kw && !t.instanceName.toLowerCase().includes(kw) && !t.host.toLowerCase().includes(kw)) {
-      return false
-    }
-    if (filterFrequency.value && t.frequency !== filterFrequency.value) return false
-    if (filterStatus.value && t.status !== filterStatus.value) return false
-    return true
-  })
+const stats = reactive<CollectTaskStats>({
+  total: 0, total1m: 0, total1h: 0, total1d: 0,
+  running: 0, stopped: 0, error: 0
 })
 
-const stats = computed(() => {
-  const all = filteredList.value
+function taskQuery() {
   return {
-    total: all.length,
-    total1m: all.filter((t) => t.frequency === '1m').length,
-    total1h: all.filter((t) => t.frequency === '1h').length,
-    total1d: all.filter((t) => t.frequency === '1d').length,
-    running: all.filter((t) => t.status === 'running').length,
-    stopped: all.filter((t) => t.status === 'stopped').length,
-    error: all.filter((t) => t.status === 'error').length
+    keyword: filterKeyword.value.trim() || undefined,
+    frequency: filterFrequency.value || undefined,
+    status: filterStatus.value || undefined,
+    pageNum: taskPage.pageNum,
+    pageSize: taskPage.pageSize
   }
-})
+}
 
 async function loadTasks() {
   loading.value = true
   try {
-    allTasks.value = await listCollectTasks()
+    const query = taskQuery()
+    const [page, summary] = await Promise.all([
+      listCollectTasks(query),
+      getCollectTaskStats(query)
+    ])
+    taskList.value = page.list ?? []
+    taskTotal.value = page.total ?? 0
+    Object.assign(stats, summary)
   } finally {
     loading.value = false
   }
+}
+
+function handleSearch() {
+  taskPage.pageNum = 1
+  loadTasks()
 }
 
 function handleReset() {
   filterKeyword.value = ''
   filterFrequency.value = ''
   filterStatus.value = ''
+  taskPage.pageNum = 1
+  loadTasks()
 }
 
-// ── 日志抽屉 ────────────────────────────────────────────────────────────────
+// ── 日志抽屉（后台分页）────────────────────────────────────────────────────
 
 const logDrawerVisible = ref(false)
 const logLoading = ref(false)
 const logList = ref<CollectLogRecord[]>([])
-const logLimit = ref(50)
+const logTotal = ref(0)
+const logPage = reactive({ pageNum: 1, pageSize: 20 })
 const currentTask = ref<CollectTaskSummary | null>(null)
 
 const logDrawerTitle = computed(() => {
@@ -272,6 +288,8 @@ const logDrawerTitle = computed(() => {
 function openLog(row: CollectTaskSummary) {
   currentTask.value = row
   logList.value = []
+  logTotal.value = 0
+  logPage.pageNum = 1
   logDrawerVisible.value = true
   loadLogs()
 }
@@ -280,14 +298,17 @@ async function loadLogs() {
   if (!currentTask.value) return
   logLoading.value = true
   try {
-    logList.value = await listCollectLogs(
-      currentTask.value.instanceId,
-      currentTask.value.frequency,
-      logLimit.value
-    )
+    const page = await listCollectLogs(currentTask.value, logPage.pageNum, logPage.pageSize)
+    logList.value = page.list ?? []
+    logTotal.value = page.total ?? 0
   } finally {
     logLoading.value = false
   }
+}
+
+function handleLogSizeChange() {
+  logPage.pageNum = 1
+  loadLogs()
 }
 
 function freqTagType(freq: string) {
@@ -307,8 +328,6 @@ function rateColor(rate: number): string {
   if (rate >= 80) return 'var(--el-color-warning)'
   return 'var(--sev-crit, #E5484D)'
 }
-
-// ── 生命周期 ────────────────────────────────────────────────────────────────
 
 onMounted(loadTasks)
 </script>
@@ -374,6 +393,12 @@ onMounted(loadTasks)
 }
 
 /* ── 日志抽屉 ── */
+.log-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .log-toolbar {
   display: flex;
   align-items: center;
