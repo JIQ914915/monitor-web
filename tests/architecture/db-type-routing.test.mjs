@@ -69,3 +69,13 @@ test('instance edit keeps database type and version immutable', async () => {
   assert.match(instancePage, /v-model="form\.dbTypeId"[^>]*:disabled="!!form\.id"/)
   assert.match(instancePage, /v-model="form\.dbVersionId"[^>]*:disabled="!!form\.id"/)
 })
+test('existing instance requests do not send database type or version', async () => {
+  const instanceApi = await source('src/api/instance.ts')
+  const instancePage = await source('src/views/system/instance/index.vue')
+
+  assert.match(instanceApi, /InstanceUpdatePayload = Omit<DbInstance, 'dbTypeId' \| 'dbVersionId' \| 'dbType' \| 'dbVersion'>/)
+  assert.match(instancePage, /instanceId: form\.id \|\| undefined/)
+  assert.match(instancePage, /const typeCode = form\.id \? undefined/)
+  assert.match(instancePage, /delete \(payload as Partial<DbInstance>\)\.dbTypeId/)
+  assert.match(instancePage, /delete \(payload as Partial<DbInstance>\)\.dbVersionId/)
+})

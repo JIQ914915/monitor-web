@@ -404,8 +404,8 @@ async function testConnection() {
     ElMessage.warning('请先填写主机地址和端口')
     return
   }
-  const typeCode = typeOptionById(form.dbTypeId)?.code
-  if (!typeCode) {
+  const typeCode = form.id ? undefined : typeOptionById(form.dbTypeId)?.code
+  if (!form.id && !typeCode) {
     ElMessage.warning('请先选择数据库类型')
     return
   }
@@ -414,6 +414,7 @@ async function testConnection() {
   permChecks.value = []
   try {
     const result = await testInstanceConnection({
+      instanceId: form.id || undefined,
       dbType: typeCode,
       host: form.host,
       port: form.port,
@@ -477,8 +478,13 @@ async function onDrawerSave() {
   }
   try {
     const payload = { ...form }
-    if (form.id) await updateInstance(payload)
-    else {
+    if (form.id) {
+      delete (payload as Partial<DbInstance>).dbTypeId
+      delete (payload as Partial<DbInstance>).dbVersionId
+      delete (payload as Partial<DbInstance>).dbType
+      delete (payload as Partial<DbInstance>).dbVersion
+      await updateInstance(payload)
+    } else {
       delete (payload as Partial<DbInstance>).id
       await createInstance(payload)
     }

@@ -35,7 +35,9 @@ export function createInstance(data: DbInstance) {
   return request<number>({ url: '/v1/instances', method: 'post', data })
 }
 
-export function updateInstance(data: DbInstance) {
+export type InstanceUpdatePayload = Omit<DbInstance, 'dbTypeId' | 'dbVersionId' | 'dbType' | 'dbVersion'>
+
+export function updateInstance(data: InstanceUpdatePayload) {
   return request<void>({ url: '/v1/instances/update', method: 'post', data })
 }
 
@@ -49,7 +51,10 @@ export function toggleInstance(id: number, status: 'normal' | 'paused') {
 }
 
 export interface ConnectionTest {
-  dbType: string
+  /** 已有实例连接测试只传 instanceId，数据库类型由服务端解析。 */
+  instanceId?: number
+  /** 仅新增实例连接测试需要传数据库类型。 */
+  dbType?: string
   host: string
   port: number
   /** 监控库名（PostgreSQL 建连必须指定库，缺省 postgres） */
