@@ -101,8 +101,15 @@
           </el-row>
           <el-row :gutter="12">
             <el-col :span="8">
-              <el-form-item label="数据库类型">
-                <el-input v-model="form.dbType" placeholder="mysql" />
+              <el-form-item label="数据库类型" prop="dbType">
+                <el-select v-model="form.dbType" placeholder="请选择数据库类型" :disabled="readonly || editingBuiltin" style="width: 100%">
+                  <el-option
+                    v-for="type in dbTypeOptions"
+                    :key="type.id"
+                    :label="type.label"
+                    :value="type.code.toLowerCase()"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8">
@@ -174,6 +181,8 @@ import {
   type DrilldownProfileVo
 } from '@/api/alert'
 import { useUserStore } from '@/stores/user'
+import { listDbTypes } from '@/api/db-type'
+import type { DbTypeOption } from '@/types'
 
 const userStore = useUserStore()
 const canToggle = computed(() => userStore.hasPermission('drilldown_profile:toggle'))
@@ -192,6 +201,7 @@ const columns: TableColumn[] = [
 // ── 列表 ─────────────────────────────────────────────────────────────────
 const loading = ref(false)
 const profiles = ref<DrilldownProfileVo[]>([])
+const dbTypeOptions = ref<DbTypeOption[]>([])
 const keyword = ref('')
 
 const filteredProfiles = computed(() => {
@@ -275,7 +285,7 @@ interface ProfileForm {
 }
 
 function emptyForm(): ProfileForm {
-  return { id: null, profileCode: '', profileLabel: '', dbType: 'mysql', matchRules: [], enabled: true, sort: 0, remark: '' }
+  return { id: null, profileCode: '', profileLabel: '', dbType: '', matchRules: [], enabled: true, sort: 0, remark: '' }
 }
 
 const form = reactive<ProfileForm>(emptyForm())
@@ -284,7 +294,8 @@ const jsonErrors = reactive<Record<BlockKey, string>>({ relatedMetrics: '', caus
 
 const rules: FormRules = {
   profileLabel: [{ required: true, message: '请输入画像名称', trigger: 'blur' }],
-  profileCode: [{ required: true, message: '请输入画像编码', trigger: 'blur' }]
+  profileCode: [{ required: true, message: '请输入画像编码', trigger: 'blur' }],
+  dbType: [{ required: true, message: '请选择数据库类型', trigger: 'change' }]
 }
 
 function fillForm(row?: DrilldownProfileVo) {
@@ -300,7 +311,7 @@ function fillForm(row?: DrilldownProfileVo) {
     id: row.id,
     profileCode: row.profileCode,
     profileLabel: row.profileLabel,
-    dbType: row.dbType || 'mysql',
+    dbType: row.dbType || '',
     matchRules: (row.matchRules ?? []).map(r => ({ ...r })),
     enabled: row.enabled,
     sort: row.sort ?? 0,
@@ -367,7 +378,7 @@ async function onSave() {
       id: form.id,
       profileCode: form.profileCode.trim(),
       profileLabel: form.profileLabel.trim(),
-      dbType: form.dbType.trim() || 'mysql',
+      dbType: form.dbType.trim(),
       matchRules: matchRules.map(r => ({ matchType: r.matchType, pattern: r.pattern.trim() })),
       relatedMetrics: blocks.relatedMetrics,
       causes: blocks.causes,
@@ -385,7 +396,10 @@ async function onSave() {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  const [, types] = await Promise.all([load(), listDbTypes()])
+  dbTypeOptions.value = types.filter(type => ['MYSQL', 'POSTGRESQL'].includes(type.code.toUpperCase()))
+})
 </script>
 
 <style scoped>

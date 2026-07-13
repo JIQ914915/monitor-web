@@ -9,7 +9,7 @@
       <div class="ib-title">
         <div class="ib-name">{{ inst.name }}</div>
         <div class="ib-sub">
-          <span class="ib-type-text">{{ inst.dbType ?? 'MySQL' }} {{ inst.dbVersion }}</span>
+          <span class="ib-type-text">{{ inst.dbType || '未知类型' }} {{ inst.dbVersion }}</span>
           <span class="ib-status-dot" :class="statusDotClass" />
           <span class="ib-status-text" :class="statusTextClass">{{ statusLabel }}</span>
         </div>
@@ -100,7 +100,8 @@ const DB_STYLE: Record<string, { accent: string; gradient: string; abbr: string 
   Oracle:     { accent: '#E08600', gradient: 'linear-gradient(135deg,#E08600,#b86b00)', abbr: 'OR' },
   SQLServer:  { accent: '#6B7280', gradient: 'linear-gradient(135deg,#6B7280,#4b5563)', abbr: 'MS' },
 }
-const dbStyle = computed(() => DB_STYLE[props.inst.dbType ?? 'MySQL'] ?? DB_STYLE['MySQL'])
+const UNKNOWN_DB_STYLE = { accent: '#6B7280', gradient: 'linear-gradient(135deg,#6B7280,#4b5563)', abbr: 'DB' }
+const dbStyle = computed(() => props.inst.dbType ? DB_STYLE[props.inst.dbType] ?? UNKNOWN_DB_STYLE : UNKNOWN_DB_STYLE)
 const accentColor  = computed(() => dbStyle.value.accent)
 const badgeGradient = computed(() => dbStyle.value.gradient)
 const dbTypeAbbr   = computed(() => dbStyle.value.abbr)

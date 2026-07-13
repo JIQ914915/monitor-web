@@ -270,7 +270,12 @@ async function viewInstance(row: FleetRiskInstance) {
       return
     }
     instanceStore.setCurrent(ins)
-    router.push(getRealtimePath(ins.dbType))
+    const path = getRealtimePath(ins.dbType)
+    if (!path) {
+      ElMessage.warning(`暂不支持数据库类型：${ins.dbType || '未配置'}`)
+      return
+    }
+    router.push(path)
   } catch {
     ElMessage.error('打开实例失败，请稍后重试')
   }

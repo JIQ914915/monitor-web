@@ -645,7 +645,12 @@ function showDetail(row: AlertEventVo) {
 /** 点击告警信息进入事件下钻分析页（§11.7）：触发信息、前后趋势、可能原因、排查路径、建议动作、历史对比 */
 function goDrilldown(row: AlertEventVo) {
   // 下钻页按当前实例类型归属对应分组（MySQL / PG），避免跨类型跳转导致菜单与内容脱节
-  router.push({ path: getDrilldownPath(instanceStore.current?.dbType), query: { eventId: row.id } })
+  const path = getDrilldownPath(instanceStore.current?.dbType)
+  if (!path) {
+    ElMessage.warning('当前实例数据库类型未识别，无法打开事件分析')
+    return
+  }
+  router.push({ path, query: { eventId: row.id } })
 }
 
 watch(() => props.instanceId, (id) => {

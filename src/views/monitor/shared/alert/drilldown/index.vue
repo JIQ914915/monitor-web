@@ -391,7 +391,7 @@ import SqlBlock from '@/components/SqlBlock.vue'
 import { fmtDurationCn as fmtDuration } from '@/utils/format'
 import { useDict } from '@/composables/useDict'
 import { useInstanceStore } from '@/stores/instance'
-import { getAlertPath, isInstanceScopedPath } from '@/utils/instanceMenu'
+import { getAlertPath, getDrilldownPath, isInstanceScopedPath } from '@/utils/instanceMenu'
 import type { AlertEventOperateLogVo, TrendPoint } from '@/types/monitor'
 import { M } from '@/constants/metrics'
 import DrilldownChart from './components/DrilldownChart.vue'
@@ -722,7 +722,12 @@ function operateColor(t: string): 'success' | 'primary' | 'warning' | 'info' {
 
 function goBack() {
   // 返回当前实例类型对应的告警管理页（PG 下钻页复用本组件）
-  router.push(getAlertPath(instanceStore.current?.dbType))
+  const path = getAlertPath(instanceStore.current?.dbType)
+  if (!path) {
+    ElMessage.warning('当前实例数据库类型未识别，无法返回告警管理')
+    return
+  }
+  router.push(path)
 }
 
 function goKnowledge(articleId: number) {
@@ -785,6 +790,14 @@ async function load() {
   loading.value = true
   try {
     ctx.value = await getAlertEventDrilldown(eventId)
+    const eventInstance = await getInstance(ctx.value.event.instanceId)
+    if (eventInstance) {
+      instanceStore.setCurrent(eventInstance)
+      const canonicalPath = getDrilldownPath(eventInstance.dbType)
+      if (canonicalPath && route.path !== canonicalPath) {
+        await router.replace({ path: canonicalPath, query: route.query })
+      }
+    }
     listAlertOperateLogs(eventId)
       .then(logs => { operateLogs.value = logs ?? [] })
       .catch(() => { operateLogs.value = [] })

@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { constantRoutes, LAYOUT_NAME } from './routes'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
+import { useInstanceStore } from '@/stores/instance'
+import { resolvePathAfterSwitch } from '@/utils/instanceMenu'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -35,6 +37,16 @@ router.beforeEach(async (to) => {
     // 注意：不能用 { ...to }，否则会把首次匹配到的 NotFound 的 name 带上，
     // vue-router 解析时 name 优先级高于 path，会再次落回 404。
     return { path: to.path, query: to.query, hash: to.hash, replace: true }
+  }
+  // 已选实例时校正跨数据库类型的实例级路径，历史链接或手工 URL 不得把 PG 带入 MySQL 页面。
+  const instanceStore = useInstanceStore()
+  const target = resolvePathAfterSwitch(to.path, instanceStore.current?.dbType, (path) => {
+    const resolved = router.resolve(path)
+    const last = resolved.matched[resolved.matched.length - 1]
+    return !!last && resolved.name !== 'NotFound'
+  })
+  if (target) {
+    return { path: target, query: to.query, hash: to.hash, replace: true }
   }
   return true
 })

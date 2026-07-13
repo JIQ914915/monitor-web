@@ -10,25 +10,33 @@ const MENU_GROUP_DB_TYPE: Record<string, string> = {
   monitor_pg: 'PostgreSQL'
 }
 
-/** 各数据库类型的实时概况路由（与 sys_menu route 层级一致），未知类型回落 MySQL。 */
-export function getRealtimePath(dbType?: string | null): string {
-  return dbType === 'PostgreSQL' ? '/monitor/pg/realtime' : '/monitor/mysql/realtime'
-}
-
 /** 数据库类型 → 实例级页面的路由前缀（与 sys_menu 中 monitor_<type> 分组的 route 一致） */
 const TYPE_PATH_PREFIX: Record<string, string> = {
   MySQL: '/monitor/mysql',
   PostgreSQL: '/monitor/pg'
 }
 
-/** 当前实例类型下的告警下钻（事件分析）页路径，未知类型回落 MySQL。 */
-export function getDrilldownPath(dbType?: string | null): string {
-  return (dbType && TYPE_PATH_PREFIX[dbType] ? TYPE_PATH_PREFIX[dbType] : '/monitor/mysql') + '/alert/drilldown'
+/** 数据库类型对应的实例页面前缀；未知类型返回 null，禁止静默落入 MySQL。 */
+export function getTypePathPrefix(dbType?: string | null): string | null {
+  return dbType ? TYPE_PATH_PREFIX[dbType] ?? null : null
 }
 
-/** 当前实例类型下的告警管理页路径，未知类型回落 MySQL。 */
-export function getAlertPath(dbType?: string | null): string {
-  return (dbType && TYPE_PATH_PREFIX[dbType] ? TYPE_PATH_PREFIX[dbType] : '/monitor/mysql') + '/alert'
+/** 各数据库类型的实时概况路由（与 sys_menu route 层级一致）。 */
+export function getRealtimePath(dbType?: string | null): string | null {
+  const prefix = getTypePathPrefix(dbType)
+  return prefix ? prefix + '/realtime' : null
+}
+
+/** 当前实例类型下的告警下钻（事件分析）页路径。 */
+export function getDrilldownPath(dbType?: string | null): string | null {
+  const prefix = getTypePathPrefix(dbType)
+  return prefix ? prefix + '/alert/drilldown' : null
+}
+
+/** 当前实例类型下的告警管理页路径。 */
+export function getAlertPath(dbType?: string | null): string | null {
+  const prefix = getTypePathPrefix(dbType)
+  return prefix ? prefix + '/alert' : null
 }
 
 /** 实例级页面路径判定（/monitor/** 下的任一类型分组页面） */
@@ -55,7 +63,7 @@ export function resolvePathAfterSwitch(
   dbType: string | null | undefined,
   hasPage: (p: string) => boolean
 ): string | null {
-  const target = dbType ? TYPE_PATH_PREFIX[dbType] : null
+  const target = getTypePathPrefix(dbType)
   if (!target) return null
   const current = pathTypePrefix(path)
   if (!current || current === target) return null

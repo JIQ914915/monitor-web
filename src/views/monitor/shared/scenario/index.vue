@@ -241,6 +241,7 @@ import { ProTable, CrudDrawer } from '@/components/ProTable'
 import type { TableColumn } from '@/components/ProTable'
 import StatCard from '@/components/StatCard.vue'
 import DictTag from '@/components/DictTag.vue'
+import { getAlertPath } from '@/utils/instanceMenu'
 
 const router = useRouter()
 const instanceStore = useInstanceStore()
@@ -409,8 +410,13 @@ function goKnowledge(articleId: number) {
 
 function goRelatedEvents() {
   if (!detail.value) return
+  const path = getAlertPath(inst.value?.dbType)
+  if (!path) {
+    ElMessage.warning('当前实例数据库类型未识别，无法打开关联事件')
+    return
+  }
   router.push({
-    path: '/monitor/mysql/alert',
+    path,
     query: { eventSource: 'scenario', scenarioCode: detail.value.scenarioCode }
   })
 }

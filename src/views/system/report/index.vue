@@ -169,9 +169,10 @@
         </el-form-item>
         <el-form-item v-if="genForm.scopeType === 'instance'" label="选择实例" prop="instanceIds">
           <el-select v-model="genForm.instanceIds" multiple filterable collapse-tags :max-collapse-tags="3" placeholder="请选择实例" style="width: 100%">
-            <el-option v-for="ins in instanceOptions" :key="ins.id" :label="`${ins.name} (${ins.host})`" :value="ins.id" />
+            <el-option v-for="ins in selectableInstanceOptions" :key="ins.id" :label="`${ins.name} (${ins.host})`" :value="ins.id" />
           </el-select>
           <div v-if="genForm.reportType === 'performance'" class="form-hint">性能分析报告仅支持单个实例，多选时取第一个</div>
+          <div v-if="genForm.reportType === 'security'" class="form-hint">安全专项报告当前仅支持 MySQL；按分组或负责人生成时也不能包含 PG 实例</div>
         </el-form-item>
         <el-form-item v-if="genForm.scopeType === 'group'" label="选择分组" prop="groupIds">
           <el-select v-model="genForm.groupIds" multiple placeholder="请选择分组" style="width: 100%">
@@ -375,6 +376,11 @@ const genVisible = ref(false)
 const genFormRef = ref<FormInstance>()
 const genDrawerRef = ref<{ stopSaving: (close?: boolean) => void } | null>(null)
 const instanceOptions = ref<DbInstance[]>([])
+const selectableInstanceOptions = computed(() =>
+  genForm.reportType === 'security'
+    ? instanceOptions.value.filter(ins => ins.dbType === 'MySQL')
+    : instanceOptions.value
+)
 const groupOptions = ref<GroupOption[]>([])
 const ownerOptions = ref<UserOption[]>([])
 
@@ -398,8 +404,17 @@ const genRules: FormRules = {
   reportType: [{ required: true, message: '请选择报告类型', trigger: 'change' }],
   instanceIds: [{
     validator: (_r, _v, cb) => {
-      if (genForm.scopeType === 'instance' && !genForm.instanceIds.length) cb(new Error('请至少选择一个实例'))
-      else cb()
+      if (genForm.scopeType === 'instance' && !genForm.instanceIds.length) {
+        cb(new Error('请至少选择一个实例'))
+        return
+      }
+      const hasUnsupported = genForm.reportType === 'security'
+        && genForm.instanceIds.some(id => instanceOptions.value.find(ins => ins.id === id)?.dbType !== 'MySQL')
+      if (hasUnsupported) {
+        cb(new Error('安全专项报告当前仅支持 MySQL 实例'))
+        return
+      }
+      cb()
     },
     trigger: 'change'
   }],

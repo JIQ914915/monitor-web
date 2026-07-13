@@ -193,8 +193,13 @@ function signalTag(signal: ScenarioSignal): 'danger' | 'success' | 'info' {
 /** 进入事件下钻分析页（§11.7），关闭抽屉后跳转（按当前实例类型归属对应分组） */
 function goDrilldown() {
   if (!props.event) return
+  const path = getDrilldownPath(instanceStore.current?.dbType)
+  if (!path) {
+    ElMessage.warning('当前实例数据库类型未识别，无法打开事件分析')
+    return
+  }
   emit('update:visible', false)
-  router.push({ path: getDrilldownPath(instanceStore.current?.dbType), query: { eventId: props.event.id } })
+  router.push({ path, query: { eventId: props.event.id } })
 }
 
 function goKnowledge(articleId: number) {

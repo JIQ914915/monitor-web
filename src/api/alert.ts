@@ -110,7 +110,7 @@ export interface DrilldownProfileSaveRequest {
   id?: number | null
   profileCode: string
   profileLabel: string
-  dbType?: string
+  dbType: string
   matchRules: DrilldownMatchRule[]
   relatedMetrics: Record<string, unknown>[]
   causes: Record<string, unknown>[]

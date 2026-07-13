@@ -59,12 +59,8 @@ export interface DrilldownProfile {
   actions: DrilldownAction[]
 }
 
-/** 排查路径 link 页面编码 → 产品内路由 */
+/** 不依赖数据库类型的页面编码，以及兼容既有 PG 专属编码。 */
 export const STEP_LINKS: Record<string, string> = {
-  slowsql: '/monitor/mysql/slowsql',
-  realtime: '/monitor/mysql/realtime',
-  performance: '/monitor/mysql/performance',
-  scenario: '/monitor/mysql/scenario',
   pg_realtime: '/monitor/pg/realtime',
   pg_replication: '/monitor/pg/replication',
   pg_performance: '/monitor/pg/performance',
@@ -73,11 +69,27 @@ export const STEP_LINKS: Record<string, string> = {
   collector: '/system/collector'
 }
 
-/** link 兼容页面编码与绝对路由两种写法 */
-function resolveStepLink(link: unknown): string | undefined {
+const TYPE_STEP_LINKS: Record<string, Record<string, string>> = {
+  mysql: {
+    slowsql: '/monitor/mysql/slowsql',
+    realtime: '/monitor/mysql/realtime',
+    performance: '/monitor/mysql/performance',
+    scenario: '/monitor/mysql/scenario'
+  },
+  postgresql: {
+    slowsql: '/monitor/pg/slowsql',
+    realtime: '/monitor/pg/realtime',
+    performance: '/monitor/pg/performance',
+    scenario: '/monitor/pg/scenario',
+    replication: '/monitor/pg/replication'
+  }
+}
+
+/** link 兼容页面编码与绝对路由两种写法；通用编码必须结合画像数据库类型解析。 */
+function resolveStepLink(link: unknown, dbType?: string | null): string | undefined {
   if (typeof link !== 'string' || !link) return undefined
   if (link.startsWith('/')) return link
-  return STEP_LINKS[link]
+  return STEP_LINKS[link] ?? (dbType ? TYPE_STEP_LINKS[dbType.toLowerCase()]?.[link] : undefined)
 }
 
 const CAUSE_COLORS = new Set(['danger', 'warning', 'info'])
@@ -117,7 +129,7 @@ export function toDrilldownProfile(vo?: DrilldownProfileVo | null): DrilldownPro
         title: s.title as string,
         description: str(s.description),
         action: str(s.action, '查看'),
-        link: resolveStepLink(s.link)
+        link: resolveStepLink(s.link, vo.dbType)
       })),
     actions: (vo.actions ?? [])
       .filter(a => typeof a.action === 'string' && a.action)
