@@ -580,7 +580,8 @@ const rules: FormRules = {
           return
         }
         try {
-          validateQueryOnlySql(form.customSql)
+          const dbType = dbTypeOptions.value.find((type) => type.id === form.dbTypeId)?.code
+          validateQueryOnlySql(form.customSql, dbType)
           cb()
         } catch (e) {
           cb(e instanceof Error ? e : new Error('SQL 校验失败'))

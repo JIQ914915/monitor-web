@@ -324,37 +324,55 @@ const SQL_TYPES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE']
 const instanceStore = useInstanceStore()
 const inst = computed(() => instanceStore.current)
 
-/** 是否 PostgreSQL 实例：文案按类型分派（数据接口本身类型无关） */
-const isPg = computed(() => inst.value?.dbType === 'PostgreSQL')
+/** 数据库类型文案必须显式分派，未知类型不得落入 MySQL。 */
+const dbKind = computed<'mysql' | 'postgresql' | 'unknown'>(() => {
+  if (inst.value?.dbType === 'MySQL') return 'mysql'
+  if (inst.value?.dbType === 'PostgreSQL') return 'postgresql'
+  return 'unknown'
+})
 
 /** 统计窗口 tooltip：按类型说明数据来源 */
-const windowTooltip = computed(() =>
-  isPg.value
-    ? '基于 pg_stat_statements 语句统计的小时级增量'
-    : '基于 performance_schema 语句摘要的小时级增量统计')
+const windowTooltip = computed(() => {
+  if (dbKind.value === 'postgresql') return '基于 pg_stat_statements 语句统计的小时级增量'
+  if (dbKind.value === 'mysql') return '基于 performance_schema 语句摘要的小时级增量统计'
+  return '当前实例数据库类型未识别，无法确定 Top SQL 数据来源'
+})
 
 /** Top SQL 不可用提示：按实例类型给出对应的启用引导 */
-const unsupportedHint = computed(() =>
-  isPg.value
-    ? {
-        title: '当前 PostgreSQL 实例未启用 pg_stat_statements 扩展，暂无法提供 Top SQL 指纹分析',
-        description:
-          '启用步骤：① postgresql.conf 中设置 shared_preload_libraries = \'pg_stat_statements\' 并重启实例；'
-          + '② 在监控库执行 CREATE EXTENSION pg_stat_statements;。就绪后系统自动开始采集（状态天级探测，可在实例能力检测中手动刷新）。'
-          + '慢SQL样本列表仍然可用：系统持续从 pg_stat_activity 采样运行中的超阈值语句'
-      }
-    : {
-        title: '当前实例为 MySQL 5.6，不支持 performance_schema 语句摘要采集，暂无法提供 Top SQL 指纹分析',
-        description:
-          '慢SQL样本列表仍然可用：请在目标库开启慢日志表输出（SET GLOBAL slow_query_log=ON; '
-          + 'SET GLOBAL log_output=\'TABLE\';），系统将自动从 mysql.slow_log 增量采集慢查询样本'
-      })
+const unsupportedHint = computed(() => {
+  if (dbKind.value === 'postgresql') {
+    return {
+      title: '当前 PostgreSQL 实例未启用 pg_stat_statements 扩展，暂无法提供 Top SQL 指纹分析',
+      description:
+        '启用步骤：① postgresql.conf 中设置 shared_preload_libraries = \'pg_stat_statements\' 并重启实例；'
+        + '② 在监控库执行 CREATE EXTENSION pg_stat_statements;。就绪后系统自动开始采集（状态天级探测，可在实例能力检测中手动刷新）。'
+        + '慢SQL样本列表仍然可用：系统持续从 pg_stat_activity 采样运行中的超阈值语句'
+    }
+  }
+  if (dbKind.value === 'mysql') {
+    return {
+      title: '当前实例为 MySQL 5.6，不支持 performance_schema 语句摘要采集，暂无法提供 Top SQL 指纹分析',
+      description:
+        '慢SQL样本列表仍然可用：请在目标库开启慢日志表输出（SET GLOBAL slow_query_log=ON; '
+        + 'SET GLOBAL log_output=\'TABLE\';），系统将自动从 mysql.slow_log 增量采集慢查询样本'
+    }
+  }
+  return {
+    title: '当前实例数据库类型未识别，暂无法提供 Top SQL 指纹分析',
+    description: '请检查实例的数据库类型配置，系统不会按 MySQL 规则进行降级处理'
+  }
+})
 
 /** 慢SQL样本空态说明：按类型说明样本来源与产生条件 */
-const sampleEmptyText = computed(() =>
-  isPg.value
-    ? '统计窗口内暂无慢SQL执行样本（系统按分钟从 pg_stat_activity 采样运行中的超阈值语句，阈值取 log_min_duration_statement，未配置时默认 1 秒）'
-    : '统计窗口内暂无慢SQL执行样本（样本自采集功能启用后开始积累，需实例产生超过 long_query_time 的语句）')
+const sampleEmptyText = computed(() => {
+  if (dbKind.value === 'postgresql') {
+    return '统计窗口内暂无慢SQL执行样本（系统按分钟从 pg_stat_activity 采样运行中的超阈值语句，阈值取 log_min_duration_statement，未配置时默认 1 秒）'
+  }
+  if (dbKind.value === 'mysql') {
+    return '统计窗口内暂无慢SQL执行样本（样本自采集功能启用后开始积累，需实例产生超过 long_query_time 的语句）'
+  }
+  return '当前实例数据库类型未识别，无法确定慢SQL样本来源'
+})
 
 /** 当前激活的分析页签 */
 const activeTab = ref('fp')

@@ -5,7 +5,14 @@ const parser = new Parser()
 const dangerousQueryFeatures =
   /\binto\s+(outfile|dumpfile)\b|\b(load_file|sleep|benchmark)\s*\(|\bfor\s+update\b|\block\s+in\s+share\s+mode\b/i
 
-export function validateQueryOnlySql(sql: string) {
+function parserDatabase(dbType?: string | null): 'MySQL' | 'Postgresql' {
+  const normalized = dbType?.trim().toUpperCase()
+  if (normalized === 'MYSQL') return 'MySQL'
+  if (normalized === 'POSTGRESQL') return 'Postgresql'
+  throw new Error('数据库类型未识别，无法校验 SQL 方言')
+}
+
+export function validateQueryOnlySql(sql: string, dbType: string | null | undefined) {
   const normalized = stripTrailingSemicolon(sql.trim())
   if (!normalized) {
     throw new Error('请输入 SQL 查询语句')
@@ -13,9 +20,10 @@ export function validateQueryOnlySql(sql: string) {
   if (dangerousQueryFeatures.test(normalized)) {
     throw new Error('SQL 包含高风险查询特性')
   }
+  const database = parserDatabase(dbType)
   let ast: any
   try {
-    ast = parser.astify(normalized, { database: 'MySQL' })
+    ast = parser.astify(normalized, { database })
   } catch {
     throw new Error('SQL 解析失败，请检查语法')
   }

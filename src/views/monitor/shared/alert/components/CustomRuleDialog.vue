@@ -274,6 +274,7 @@ const props = defineProps<{
   visible: boolean
   rule: AlertRuleVo | null
   instanceId?: number
+  dbType?: string
 }>()
 
 const emit = defineEmits<{
@@ -360,7 +361,7 @@ const rules: FormRules = {
       trigger: 'blur',
       validator: (_: unknown, value: unknown, cb: (e?: Error) => void) => {
         try {
-          validateQueryOnlySql(String(value ?? ''))
+          validateQueryOnlySql(String(value ?? ''), props.dbType)
           cb()
         } catch (e) {
           cb(e instanceof Error ? e : new Error('SQL 校验失败'))
@@ -449,7 +450,7 @@ function resetForm() {
 
 async function onDrawerSave(_mode: DrawerMode) {
   try {
-    validateQueryOnlySql(form.customSql)
+    validateQueryOnlySql(form.customSql, props.dbType)
     const req: AlertRuleSaveRequest = {
       id: form.id,
       ruleCode: form.ruleCode || undefined,

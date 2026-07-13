@@ -107,12 +107,12 @@
         <el-input v-model="form.name" placeholder="如 mysql-prod-01" />
       </el-form-item>
       <el-form-item label="数据库类型" prop="dbTypeId">
-        <el-select v-model="form.dbTypeId" style="width: 100%" @change="onDbTypeChange">
+        <el-select v-model="form.dbTypeId" style="width: 100%" :disabled="!!form.id" @change="onDbTypeChange">
           <el-option v-for="t in dbTypeOptions" :key="t.id" :label="t.label" :value="t.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="版本" prop="dbVersionId">
-        <el-select v-model="form.dbVersionId" style="width: 100%">
+        <el-select v-model="form.dbVersionId" style="width: 100%" :disabled="!!form.id">
           <el-option
             v-for="v in versionOptions"
             :key="v.id"

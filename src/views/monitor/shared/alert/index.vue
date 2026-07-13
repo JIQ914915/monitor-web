@@ -200,6 +200,7 @@
       v-model:visible="customDialogVisible"
       :rule="editingCustomRule"
       :instance-id="inst?.id"
+      :db-type="inst?.dbType"
       @saved="onSaved"
     />
 

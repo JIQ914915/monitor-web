@@ -88,7 +88,14 @@ const TYPE_STEP_LINKS: Record<string, Record<string, string>> = {
 /** link 兼容页面编码与绝对路由两种写法；通用编码必须结合画像数据库类型解析。 */
 function resolveStepLink(link: unknown, dbType?: string | null): string | undefined {
   if (typeof link !== 'string' || !link) return undefined
-  if (link.startsWith('/')) return link
+  if (link.startsWith('/')) {
+    const routeType = link === '/monitor/mysql' || link.startsWith('/monitor/mysql/')
+      ? 'mysql'
+      : link === '/monitor/pg' || link.startsWith('/monitor/pg/')
+        ? 'postgresql'
+        : null
+    return routeType == null || dbType?.toLowerCase() === routeType ? link : undefined
+  }
   return STEP_LINKS[link] ?? (dbType ? TYPE_STEP_LINKS[dbType.toLowerCase()]?.[link] : undefined)
 }
 
