@@ -17,6 +17,8 @@
       <!-- 能力降级提示：一期未覆盖能力（Top SQL / 慢SQL样本等）在此说明 -->
       <CapabilityBanner :instance-id="inst.id" />
 
+      <PgSessionPanel :instance-id="inst.id" />
+
       <!-- 关键状态卡片 -->
       <div class="stat-row">
         <div class="stat-card" v-for="s in statCards" :key="s.label">
@@ -137,6 +139,7 @@ import { QuestionFilled } from '@element-plus/icons-vue'
 import { useInstanceStore } from '@/stores/instance'
 import InstanceEmpty from '@/components/InstanceEmpty.vue'
 import CapabilityBanner from '@/components/CapabilityBanner.vue'
+import PgSessionPanel from '@/views/monitor/pg/realtime/components/PgSessionPanel.vue'
 import TrendChart, { type ThresholdLine, type EventMarker } from '@/components/TrendChart.vue'
 import InstanceBanner from '@/views/monitor/shared/realtime/components/InstanceBanner.vue'
 import { toggleInstance } from '@/api/instance'

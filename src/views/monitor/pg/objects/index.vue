@@ -107,6 +107,8 @@
           title="未发现失效索引"
         />
       </el-card>
+
+      <PgAdvisorPanel />
     </template>
   </div>
 </template>
@@ -116,6 +118,7 @@ import { ref, computed, watch } from 'vue'
 import { useInstanceStore } from '@/stores/instance'
 import InstanceEmpty from '@/components/InstanceEmpty.vue'
 import ProTable from '@/components/ProTable/index.vue'
+import PgAdvisorPanel from './components/PgAdvisorPanel.vue'
 import { getMetricObjects, getMetricTextLatest, pageUnusedIndex } from '@/api/metric'
 import { PG } from '@/constants/pg-metrics'
 import type { TableColumn } from '@/components/ProTable/types'

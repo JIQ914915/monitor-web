@@ -99,6 +99,9 @@ export const PG = {
   IO_READ_RATE:            'pg.io.read_rate',
   IO_WRITE_RATE:           'pg.io.write_rate',
   IO_EXTEND_RATE:          'pg.io.extend_rate',
+  IO_READ_BYTES_RATE:      'pg.io.read_bytes_rate',
+  IO_WRITE_BYTES_RATE:     'pg.io.write_bytes_rate',
+  IO_EXTEND_BYTES_RATE:    'pg.io.extend_bytes_rate',
 
   // ── 膨胀 / XID / vacuum（小时级或分钟级，二期 C2~C4） ───────────────────
   BLOAT_DEAD_TUP_TOTAL:    'pg.bloat.dead_tup_total',

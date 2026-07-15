@@ -139,6 +139,20 @@
           placeholder="可选，如 mydb；填写后采集建连时替换 URL 中的 {database}"
         />
       </el-form-item>
+      <template v-if="isPostgreSql">
+        <el-form-item label="对象采集范围">
+          <el-select v-model="form.pgObjectScope" style="width: 100%">
+            <el-option label="仅监控连接库" value="monitoring" />
+            <el-option label="指定数据库" value="selected" />
+            <el-option label="全部可连接数据库" value="all" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="form.pgObjectScope === 'selected'" label="指定数据库">
+          <el-select v-model="form.pgObjectDatabases" multiple filterable allow-create default-first-option style="width: 100%" placeholder="输入数据库名后回车">
+            <el-option v-for="name in form.pgObjectDatabases ?? []" :key="name" :label="name" :value="name" />
+          </el-select>
+        </el-form-item>
+      </template>
       <el-form-item label="所在主机">
         <el-select
           v-model="form.hostId"
@@ -360,6 +374,8 @@ function emptyForm(): DbInstance {
     connUser: '',
     connPassword: '',
     databaseName: '',
+    pgObjectScope: 'monitoring',
+    pgObjectDatabases: [],
     hostId: null,
     health: 0,
     status: 'normal',
@@ -376,6 +392,7 @@ const whitelistText = computed({
 })
 
 const versionOptions = computed<DbVersionOption[]>(() => typeOptionById(form.dbTypeId)?.versions ?? [])
+const isPostgreSql = computed(() => typeOptionById(form.dbTypeId)?.code?.toUpperCase() === 'POSTGRESQL')
 
 const rules: FormRules<DbInstance> = {
   name: [{ required: true, message: '请输入实例名称', trigger: 'blur' }],
@@ -391,6 +408,10 @@ function onDbTypeChange() {
   const opt = typeOptionById(form.dbTypeId)
   form.dbVersionId = opt?.versions?.[0]?.id ?? null
   if (opt?.defaultPort) form.port = opt.defaultPort
+  if (opt?.code?.toUpperCase() !== 'POSTGRESQL') {
+    form.pgObjectScope = 'monitoring'
+    form.pgObjectDatabases = []
+  }
 }
 
 // ===== 连接测试 =====

@@ -261,6 +261,10 @@ export interface DbInstance {
   connPassword?: string
   /** 连接目标数据库名（采集建连时替换 URL 模板中的 {database} 占位符） */
   databaseName?: string
+  /** PG对象级采集范围：monitoring / selected / all */
+  pgObjectScope?: 'monitoring' | 'selected' | 'all'
+  /** PG对象级采集选定数据库列表 */
+  pgObjectDatabases?: string[]
   /** 所在主机 ID（host.id，可空） */
   hostId?: number | null
   /** 所在主机名称（后端解析，只读） */

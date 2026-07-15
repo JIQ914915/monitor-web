@@ -158,6 +158,15 @@ const CATEGORIES: CategoryDef[] = [
     ]
   },
   {
+    id: 'io-bytes', label: 'I/O 吞吐（PG 18+）',
+    tip: 'PostgreSQL 18 的 pg_stat_io 提供字节级读取、写入和文件扩展吞吐；低版本明确无此能力。',
+    metrics: [
+      { code: PG.IO_READ_BYTES_RATE,   label: '读取吞吐', unit: 'B/s', color: '#0C7C97' },
+      { code: PG.IO_WRITE_BYTES_RATE,  label: '写入吞吐', unit: 'B/s', color: '#E08600' },
+      { code: PG.IO_EXTEND_BYTES_RATE, label: '扩展吞吐', unit: 'B/s', color: '#6366F1' }
+    ]
+  },
+  {
     id: 'maintenance', label: '膨胀与回卷（小时级）',
     tip: '单表死元组占比最大值：>20% 关注、>40% 建议人工介入\nXID 回卷消耗：距强制停写上限的消耗百分比，PG 特有高危风险\n膨胀表数量：死元组占比超 20% 的用户表数',
     metrics: [
