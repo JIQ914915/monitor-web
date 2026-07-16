@@ -104,7 +104,7 @@
         <div class="section-title">等待事件分析</div>
         <el-empty
           v-if="!hasWaitsData"
-          description="等待事件分析依赖 performance_schema（MySQL 5.7/8.0），当前实例暂无等待事件数据"
+          description="等待事件分析依赖 performance_schema（MySQL 5.7/8.0/8.4），当前实例暂无等待事件数据"
           :image-size="60"
         />
         <template v-else>

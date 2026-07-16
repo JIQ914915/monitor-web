@@ -42,7 +42,7 @@
       </ProTable>
     </el-card>
 
-    <!-- ①.5 表 I/O 热点（近 1 小时，5.7/8.0） -->
+    <!-- ①.5 表 I/O 热点（近 1 小时，5.7/8.0/8.4） -->
     <el-card shadow="never" v-loading="loadingTableIo">
       <template #header>
         <div class="card-header-row">
@@ -90,7 +90,7 @@
       </ProTable>
     </el-card>
 
-    <!-- ①.6 疑似未使用索引（天级扫描，5.7/8.0） -->
+    <!-- ①.6 疑似未使用索引（天级扫描，5.7/8.0/8.4） -->
     <el-card shadow="never" v-loading="loadingUnusedIdx">
       <template #header>
         <div class="card-header-row">

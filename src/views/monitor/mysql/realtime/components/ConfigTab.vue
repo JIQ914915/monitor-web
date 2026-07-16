@@ -1,6 +1,6 @@
 <template>
   <div>
-  <!-- 参数调优建议（规则化体检，只出建议不出手） -->
+  <MySqlDiagnosticPanel :instance-id="props.instanceId" kind="config" />
   <div class="advice-block">
     <div class="advice-head">
       <span class="advice-title">参数调优建议</span>
@@ -122,6 +122,7 @@
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ProTable from '@/components/ProTable/index.vue'
+import MySqlDiagnosticPanel from '../../components/MySqlDiagnosticPanel.vue'
 import { pageParams, getParamAdvice } from '@/api/metric'
 import type { ParamPageItemVo, ParamAdviceVo } from '@/types/monitor'
 import type { TableColumn } from '@/components/ProTable/types'

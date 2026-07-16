@@ -9,8 +9,7 @@
             <span class="card-sub">{{ inst.name }} · 主从复制状态与延迟</span>
           </div>
         </template>
-
-        <!-- 主库/未知：说明性提示 -->
+        <MySqlDiagnosticPanel :instance-id="inst.id" kind="replication" />
         <el-alert
           v-if="isReplica === false"
           type="info"
@@ -62,6 +61,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useInstanceStore } from '@/stores/instance'
 import InstanceEmpty from '@/components/InstanceEmpty.vue'
 import TrendChart from '@/components/TrendChart.vue'
+import MySqlDiagnosticPanel from '../components/MySqlDiagnosticPanel.vue'
 import { getMetricTrend, getMetricLatest } from '@/api/metric'
 import { M } from '@/constants/metrics'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'

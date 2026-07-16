@@ -64,7 +64,8 @@ function buildMockMenus(): MenuNode[] {
 const VERSION_DEFS = [
   { id: 1, code: '5.6' },
   { id: 2, code: '5.7' },
-  { id: 3, code: '8.0' }
+  { id: 3, code: '8.0' },
+  { id: 4, code: '8.4' }
 ]
 const ENVS = ['生产', '测试', '预发']
 const LEVELS: DbInstance['healthLevel'][] = ['excellent', 'good', 'warning', 'critical']
@@ -517,7 +518,8 @@ export function mockAdapter<T>(config: AxiosRequestConfig): Promise<T> {
         versions: [
           { id: 1, value: '5.6', label: 'MySQL 5.6', recommended: false, deprecated: true },
           { id: 2, value: '5.7', label: 'MySQL 5.7', recommended: true, deprecated: false },
-          { id: 3, value: '8.0', label: 'MySQL 8.0', recommended: true, deprecated: false }
+          { id: 3, value: '8.0', label: 'MySQL 8.0', recommended: true, deprecated: false },
+          { id: 4, value: '8.4', label: 'MySQL 8.4 LTS', recommended: true, deprecated: false }
         ]
       }
     ] as unknown as T)

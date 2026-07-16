@@ -1,5 +1,6 @@
 <template>
   <div class="security-tab" v-loading="loading">
+    <MySqlDiagnosticPanel :instance-id="props.instanceId" kind="security" />
     <template v-if="!loading">
       <!-- 概览状态行 -->
       <div class="status-row">
@@ -118,7 +119,7 @@
           type="info"
           :closable="false"
           show-icon
-          title="当前实例版本（MySQL 5.6）不支持语句审计，需 5.7/8.0 的 performance_schema 语句摘要能力"
+          title="当前实例版本（MySQL 5.6）不支持语句审计，需 5.7/8.0/8.4 的 performance_schema 语句摘要能力"
         />
         <template v-else>
           <div class="chart-grid">
@@ -180,6 +181,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import TrendChart from '@/components/TrendChart.vue'
+import MySqlDiagnosticPanel from '../../components/MySqlDiagnosticPanel.vue'
 import { getMetricTrend, getMetricLatest, getMetricTextLatest } from '@/api/metric'
 import { M } from '@/constants/metrics'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'

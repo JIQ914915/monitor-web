@@ -75,6 +75,11 @@
           <template v-if="realSql">
             <div class="section-title explain-head">
               <span>执行计划（目标库实时 EXPLAIN）</span>
+              <el-select v-model="planFormat" size="small" style="width:120px">
+                <el-option label="JSON 结构化" value="json" />
+                <el-option label="TREE" value="tree" />
+                <el-option label="传统表格" value="tabular" />
+              </el-select>
               <el-button size="small" :loading="explainLoading" @click="loadExplain">
                 {{ explainResult ? '重新获取' : '获取执行计划' }}
               </el-button>
@@ -95,24 +100,39 @@
               :title="explainError"
               class="explain-alert"
             />
-            <el-table
-              v-if="explainResult && explainResult.rows.length"
-              :data="explainTableRows"
-              stripe
-              size="small"
-              max-height="260"
-              class="explain-table"
-            >
-              <el-table-column
-                v-for="col in explainResult.columns"
-                :key="col"
-                :prop="col"
-                :label="col"
-                :min-width="explainColWidth(col)"
-                show-overflow-tooltip
-              />
-            </el-table>
-            <div v-else-if="!explainLoading && !explainError && !sqlTruncated && !explainResult" class="explain-hint">
+            <el-alert v-if="explainResult" :closable="false" show-icon class="explain-alert">
+              <template #title>
+                <DictTag dict="mysql_risk_level" :value="explainResult.riskLevel" />
+                <span class="plan-conclusion">{{ explainResult.conclusion }}</span>
+                <DictTag dict="mysql_plan_change_status" :value="explainResult.planChanged ? 'changed' : 'unchanged'" />
+              </template>
+            </el-alert>
+            <ProTable v-if="explainResult && explainDisplayRows.length" :data="explainDisplayRows"
+              :columns="explainColumns" :show-toolbar="false" :show-operation="false"
+              :show-pagination="false" embedded class="inner-table explain-table" />
+            <div v-if="explainResult?.planDiff?.length" class="section-title">与上一人工计划的关键差异</div>
+            <ProTable v-if="explainResult?.planDiff?.length" :data="explainResult.planDiff"
+              :columns="planDiffColumns" :show-toolbar="false" :show-operation="false"
+              :show-pagination="false" embedded class="inner-table" />
+            <div v-if="explainResult && planFormat !== 'tabular'" class="advanced-plan">
+              <el-collapse><el-collapse-item title="原始计划（高级信息）"><pre>{{ JSON.stringify(explainResult.plan, null, 2) }}</pre></el-collapse-item></el-collapse>
+            </div>
+            <div v-if="planHistory.length" class="section-title">人工计划历史</div>
+            <ProTable v-if="planHistory.length" :data="planHistory" :columns="historyColumns"
+              :show-toolbar="false" :show-operation="false" :show-pagination="false"
+              embedded class="inner-table" @row-click="showPlanHistory">
+              <template #col-plan-change="{ row: historyRow }"><DictTag dict="mysql_plan_change_status" :value="historyRow.planChanged ? 'changed' : 'unchanged'" /></template>
+              <template #col-plan-risk="{ row: historyRow }"><DictTag dict="mysql_risk_level" :value="historyRow.riskLevel" /></template>
+            </ProTable>
+            <CrudDrawer v-model:visible="planDetailVisible" mode="view" title="执行计划历史证据" size="720px">
+              <el-descriptions :column="1" border>
+                <el-descriptions-item label="Plan Hash">{{ selectedPlan?.planHash }}</el-descriptions-item>
+                <el-descriptions-item label="上一版本">{{ selectedPlan?.previousPlanHash || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="结论">{{ selectedPlan?.conclusion }}</el-descriptions-item>
+              </el-descriptions>
+              <pre class="plan-payload">{{ JSON.stringify(selectedPlan?.plan, null, 2) }}</pre>
+            </CrudDrawer>
+            <div v-if="!explainLoading && !explainError && !sqlTruncated && !explainResult" class="explain-hint">
               点击「获取执行计划」，系统将使用采集账号连接目标库执行 EXPLAIN（只做优化器分析，不会真正执行该语句）
             </div>
           </template>
@@ -267,6 +287,11 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CopyDocument, Download, MagicStick } from '@element-plus/icons-vue'
 import SqlBlock from '@/components/SqlBlock.vue'
+import ProTable from '@/components/ProTable/index.vue'
+import CrudDrawer from '@/components/ProTable/CrudDrawer.vue'
+import DictTag from '@/components/DictTag.vue'
+import type { TableColumn } from '@/components/ProTable/types'
+import { getMySqlPlanHistory, type MySqlPlanHistory } from '@/api/mysqlDiagnostics'
 import { fmtCount, fmtMs, fmtYmdHm as fmtTime, pct } from '@/utils/format'
 import * as echarts from 'echarts/core'
 import { LineChart, BarChart } from 'echarts/charts'
@@ -300,6 +325,28 @@ const chartRef = ref<HTMLDivElement>()
 const explainLoading = ref(false)
 const explainResult = ref<SlowSqlExplainVo | null>(null)
 const explainError = ref<string | null>(null)
+const planFormat = ref<'json' | 'tree' | 'tabular'>('json')
+const planHistory = ref<MySqlPlanHistory[]>([])
+const planDetailVisible = ref(false)
+const selectedPlan = ref<MySqlPlanHistory>()
+const planDiffColumns: TableColumn[] = [
+  { prop:'path', label:'节点', width:160 },
+  { prop:'changeType', label:'变化类型', width:100 },
+  { prop:'previousAccessType', label:'原访问类型', width:110 },
+  { prop:'currentAccessType', label:'现访问类型', width:110 },
+  { prop:'previousKey', label:'原索引', minWidth:140 },
+  { prop:'currentKey', label:'现索引', minWidth:140 },
+  { prop:'previousRowsExamined', label:'原扫描行', width:110 },
+  { prop:'currentRowsExamined', label:'现扫描行', width:110 }
+]
+const historyColumns: TableColumn[] = [
+  { prop:'capturedAt', label:'获取时间', width:180 },
+  { prop:'planFormat', label:'格式', width:90 },
+  { label:'变化', slot:'col-plan-change', width:110 },
+  { label:'风险', slot:'col-plan-risk', width:100 },
+  { prop:'planHash', label:'Plan Hash', minWidth:220 },
+  { prop:'conclusion', label:'结论', minWidth:300 }
+]
 
 /** SQL 在采集时被目标库截断（performance_schema 以 ... 结尾标记），无法 EXPLAIN */
 const sqlTruncated = computed(() => (props.realSql ?? '').trimEnd().endsWith('...'))
@@ -315,9 +362,26 @@ const explainTableRows = computed(() => {
   })
 })
 
+const explainDisplayRows = computed<Record<string, any>[]>(() => {
+  if (!explainResult.value) return []
+  return planFormat.value === 'tabular' ? explainTableRows.value : (explainResult.value.nodeSummary || [])
+})
+const explainColumns = computed<TableColumn[]>(() => planFormat.value === 'tabular'
+  ? (explainResult.value?.columns || []).map(col => ({ prop:col, label:col, minWidth:explainColWidth(col) }))
+  : [
+      { prop:'path',label:'节点',width:150 },{ prop:'table',label:'表',minWidth:150 },
+      { prop:'accessType',label:'访问类型',width:110 },{ prop:'key',label:'索引',minWidth:150 },
+      { prop:'rowsExamined',label:'估算扫描行',width:120 },{ prop:'filtered',label:'过滤比例',width:100 },
+      { prop:'usingTemporary',label:'临时表',width:90 },{ prop:'usingFilesort',label:'文件排序',width:100 }
+    ])
+
 function explainColWidth(col: string): number {
   const wide = ['table', 'possible_keys', 'key', 'ref', 'Extra']
   return wide.includes(col) ? 150 : 90
+}
+function showPlanHistory(historyRow: MySqlPlanHistory) {
+  selectedPlan.value = historyRow
+  planDetailVisible.value = true
 }
 
 async function loadExplain() {
@@ -328,8 +392,13 @@ async function loadExplain() {
     explainResult.value = await explainSlowSql({
       instanceId: props.instanceId,
       schemaName: props.row?.schemaName ?? null,
-      sql: props.realSql
+      sql: props.realSql,
+      planFormat: planFormat.value,
+      saveHistory: true
     })
+    if (props.row?.schemaName && explainResult.value?.sqlHash) {
+      planHistory.value = await getMySqlPlanHistory(props.instanceId, props.row.schemaName, explainResult.value.sqlHash)
+    }
   } catch (e) {
     explainResult.value = null
     explainError.value = e instanceof Error && e.message
@@ -673,6 +742,9 @@ watch(() => props.visible, (v) => {
     trendPoints.value = []
     explainResult.value = null
     explainError.value = null
+    planHistory.value = []
+    selectedPlan.value = undefined
+    planDetailVisible.value = false
     aiResult.value = null
     aiError.value = null
     loadTrend()

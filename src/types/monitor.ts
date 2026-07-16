@@ -97,6 +97,16 @@ export interface SlowSqlSampleVo {
 export interface SlowSqlExplainVo {
   columns: string[]
   rows: (string | null)[][]
+  planFormat: 'json' | 'tree' | 'tabular'
+  plan: unknown
+  nodeSummary: Record<string, unknown>[]
+  sqlHash: string
+  planHash: string
+  previousPlanHash?: string
+  planChanged: boolean
+  planDiff: Record<string, unknown>[]
+  riskLevel: 'low' | 'medium' | 'high'
+  conclusion: string
 }
 
 /** 慢SQL相关告警事件（依赖慢查询指标的规则触发） */
@@ -282,6 +292,10 @@ export interface CapacityForecastVo {
   diskUsagePercent: number | null
   estimatedDaysRemaining: number | null
   note: string | null
+  predictionStatus: 'stable' | 'risk' | 'insufficient'
+  dailyGrowth7dBytes: number | null
+  dailyGrowth30dBytes: number | null
+  estimatedExhaustionDate: string | null
 }
 
 // ─────────────────────────────────────────────

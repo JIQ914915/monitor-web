@@ -133,6 +133,8 @@ export function explainSlowSql(data: {
   instanceId: number
   schemaName?: string | null
   sql: string
+  planFormat?: 'json' | 'tree' | 'tabular'
+  saveHistory?: boolean
 }) {
   return request<SlowSqlExplainVo>({
     url: '/v1/slow-sql/explain',

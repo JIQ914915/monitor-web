@@ -7,9 +7,11 @@
         <template #header>
           <div class="card-head">
             <span class="card-title">锁等待分析</span>
-            <span class="card-sub">{{ inst.name }} · 最近 1 小时</span>
+            <span class="card-sub">{{ inst.name }} · 当前阻塞诊断与最近 1 小时趋势</span>
           </div>
         </template>
+        <MySqlDiagnosticPanel :instance-id="inst.id" kind="mdl" embedded />
+        <div class="section-heading">最近 1 小时趋势</div>
         <div class="chart-grid">
           <TrendChart title="锁等待数" :data="charts.lockWaits" color="#E5484D" />
           <TrendChart title="阻塞会话数" :data="charts.blockedSessions" color="#9B59B6" />
@@ -59,6 +61,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useInstanceStore } from '@/stores/instance'
 import InstanceEmpty from '@/components/InstanceEmpty.vue'
 import TrendChart from '@/components/TrendChart.vue'
+import MySqlDiagnosticPanel from '../components/MySqlDiagnosticPanel.vue'
 import ProTable from '@/components/ProTable/index.vue'
 import type { TableColumn } from '@/components/ProTable/types'
 import { getMetricTrend, getMetricLatest, getMetricTextLatest } from '@/api/metric'
@@ -123,6 +126,14 @@ watch(() => inst.value?.id, () => loadAll(), { immediate: true })
 .card-head { display: flex; align-items: baseline; gap: 12px; }
 .card-title { font-size: 15px; font-weight: 600; }
 .card-sub { font-size: 12px; color: var(--el-text-color-secondary); }
+.section-heading {
+  margin: 4px 0 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
 .chart-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 @media (max-width: 1200px) { .chart-grid { grid-template-columns: 1fr; } }
 .hint {

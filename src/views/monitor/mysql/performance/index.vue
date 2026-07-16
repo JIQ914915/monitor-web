@@ -36,8 +36,12 @@
           </div>
         </div>
       </el-card>
-
-      <!-- 图例说明 -->
+      <MySqlDiagnosticPanel
+        :instance-id="inst.id"
+        kind="correlation"
+        :from="effectiveQuery.from"
+        :to="effectiveQuery.to"
+      />
       <div class="chart-legend-hint">
         图例说明：<span class="hint-threshold">╌╌ 红色虚线</span>为该实例已启用告警规则的阈值；
         <span class="hint-marker">┆ 橙色竖线</span>为窗口内告警事件的触发时间（鼠标移到竖线附近，提示框中会显示触发的规则与时间）
@@ -65,6 +69,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 import { useInstanceStore } from '@/stores/instance'
 import InstanceEmpty from '@/components/InstanceEmpty.vue'
+import MySqlDiagnosticPanel from '../components/MySqlDiagnosticPanel.vue'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { getPerfTrendBatch, getMetricLatest, pageAlertEvents } from '@/api/metric'
 import { pageAlertRules } from '@/api/alert'
@@ -213,6 +218,8 @@ const inst = computed(() => instanceStore.current)
 const timeRange = ref('1d')
 /** 自定义时间范围（选择后覆盖快捷档位；切回快捷档位时清空） */
 const customRange = ref<[Date, Date] | null>(null)
+/** 快捷范围的滚动终点；每次刷新时推进，确保图表和关联诊断使用同一窗口。 */
+const queryClock = ref(Date.now())
 const loading = ref(false)
 /** metricCode → 趋势点（已做单位换算） */
 const pointsByCode = reactive<Record<string, TrendPoint[]>>({})
@@ -232,7 +239,7 @@ const effectiveQuery = computed<{ from: number; to: number; freq: '1m' | '1h' }>
     return { from, to, freq: to - from <= CUSTOM_1M_MAX_SPAN_MS ? '1m' : '1h' }
   }
   const range = RANGES.find(r => r.key === timeRange.value) ?? RANGES[2]
-  const now = Date.now()
+  const now = queryClock.value
   return { from: now - range.ms, to: now, freq: range.freq }
 })
 
@@ -369,6 +376,7 @@ function onCustomRangeChange(val: [Date, Date] | null) {
 
 async function loadAll(silent = false) {
   if (!inst.value) return
+  if (!customRange.value) queryClock.value = Date.now()
   // 定时刷新走静默模式：不置 loading，避免图表每分钟闪烁一次
   if (!silent) {
     loading.value = true
