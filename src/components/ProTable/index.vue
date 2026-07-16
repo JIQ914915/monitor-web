@@ -5,7 +5,7 @@
     <el-card v-if="$slots.search" shadow="never" class="search-card">
       <el-form :inline="true" class="search-form-wrap" @submit.prevent="onSearch">
         <!-- 搜索条件（可折叠） -->
-        <div :class="['search-items', { 'search-items--collapsed': searchCollapsed }]">
+        <div ref="searchItemsRef" :class="['search-items', { 'search-items--collapsed': searchCollapsed && canCollapse }]">
           <slot name="search" />
         </div>
         <!-- 查询 / 重置 / 展开收起（始终右对齐） -->
@@ -13,7 +13,7 @@
           <el-button type="primary" :icon="Search" :loading="loading" native-type="submit">查询</el-button>
           <el-button :icon="RefreshLeft" @click="onReset">重置</el-button>
           <el-button
-            v-if="collapsible"
+            v-if="collapsible && canCollapse"
             link
             type="primary"
             :icon="searchCollapsed ? ArrowDown : ArrowUp"
@@ -224,7 +224,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { CheckboxValueType, TableInstance } from 'element-plus'
 import {
@@ -373,6 +373,20 @@ const currentPageSize = computed({
 
 // ── 搜索折叠 ──────────────────────────────────────────────────────────────────
 const searchCollapsed = ref(props.defaultCollapsed)
+const searchItemsRef = ref<HTMLElement>()
+const canCollapse = ref(false)
+let searchResizeObserver: ResizeObserver | undefined
+
+function updateSearchCollapsible() {
+  const element = searchItemsRef.value
+  if (!props.collapsible || !element) {
+    canCollapse.value = false
+    return
+  }
+  const firstItem = element.querySelector<HTMLElement>('.el-form-item')
+  const firstRowHeight = firstItem?.offsetHeight || 32
+  canCollapse.value = element.scrollHeight > firstRowHeight + 2
+}
 
 function onSearch() { emit('search') }
 function onReset() { emit('reset') }
@@ -499,8 +513,19 @@ function onFullscreenChange() {
   isFullscreen.value = !!document.fullscreenElement
 }
 
-onMounted(() => document.addEventListener('fullscreenchange', onFullscreenChange))
-onBeforeUnmount(() => document.removeEventListener('fullscreenchange', onFullscreenChange))
+onMounted(async () => {
+  document.addEventListener('fullscreenchange', onFullscreenChange)
+  await nextTick()
+  updateSearchCollapsible()
+  if (searchItemsRef.value && typeof ResizeObserver !== 'undefined') {
+    searchResizeObserver = new ResizeObserver(updateSearchCollapsible)
+    searchResizeObserver.observe(searchItemsRef.value)
+  }
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+  searchResizeObserver?.disconnect()
+})
 
 // ── 暴露 ─────────────────────────────────────────────────────────────────────
 defineExpose({ clearSelection, selectedRows, tableRef })
@@ -548,30 +573,55 @@ defineExpose({ clearSelection, selectedRows, tableRef })
   margin-bottom: 0;
 }
 
-/* 整行：搜索条件 + 按钮同行，按钮右对齐，垂直居中 */
+/* 搜索条件与按钮分区布局，避免控件和按钮进入同一个换行流。 */
 .search-form-wrap {
-  display: flex !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 24px;
+  row-gap: 12px;
+  width: 100%;
+}
+
+.search-items {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 8px;
+  gap: 12px 20px;
+  min-width: 0;
 }
 
-/* 搜索条件区域，直接参与外层 flex 排列 */
-.search-items {
-  display: contents;
+.search-items :deep(.el-form-item) {
+  margin-right: 0;
+  min-width: 0;
 }
 
+/* 折叠时保留首行常用条件，通过按钮可展开全部条件。 */
 .search-items--collapsed {
-  display: none;
+  max-height: 32px;
+  overflow: hidden;
 }
 
-/* 按钮组推到最右侧 */
 .search-btns {
-  margin-left: auto !important;
+  margin-left: 0 !important;
   margin-right: 0 !important;
+  min-height: 32px;
   flex-shrink: 0;
 }
 
+.search-btns :deep(.el-form-item__content) {
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 900px) {
+  .search-form-wrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .search-btns {
+    justify-self: end;
+  }
+}
 /* 工具栏 ─────────────────────────────── */
 .toolbar {
   display: flex;

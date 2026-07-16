@@ -1,117 +1,51 @@
 <template>
-  <el-card shadow="never" class="analytics-card">
-    <el-tabs v-model="tab" @tab-change="loadActive">
-      <el-tab-pane label="Query Analytics" name="analytics">
-        <el-form inline class="filters" @submit.prevent>
-          <el-form-item label="数据库"><el-input v-model="database" clearable placeholder="全部" /></el-form-item>
-          <el-form-item label="用户"><el-input v-model="user" clearable placeholder="全部" /></el-form-item>
-          <el-form-item label="Query ID"><el-input v-model="queryId" clearable placeholder="全部" style="width: 170px" /></el-form-item>
-          <el-form-item label="时间范围"><el-date-picker v-model="dateRange" type="datetimerange" range-separator="至" start-placeholder="开始" end-placeholder="结束" /></el-form-item>
-          <el-form-item label="排序">
-            <el-select v-model="sortBy" style="width: 150px">
-              <el-option label="总执行时间" value="totalExecTimeMs" />
-              <el-option label="平均耗时" value="avgExecTimeMs" />
-              <el-option label="调用次数" value="calls" />
-              <el-option label="临时块写入" value="tempWritten" />
-              <el-option label="WAL 字节" value="walBytes" />
-            </el-select>
-          </el-form-item>
-          <el-button type="primary" :loading="loading" @click="loadAnalytics">查询</el-button>
-        </el-form>
-        <el-table :data="analytics" v-loading="loading" border stripe height="430">
-          <el-table-column prop="database" label="数据库" width="130" />
-          <el-table-column prop="user" label="用户" width="120" />
-          <el-table-column prop="queryText" label="SQL" min-width="340" show-overflow-tooltip />
-          <el-table-column prop="calls" label="调用" width="90" sortable />
-          <el-table-column label="平均耗时(ms)" width="130"><template #default="{ row }">{{ fmt(row.avgExecTimeMs) }}</template></el-table-column>
-          <el-table-column label="P波动(ms)" width="115"><template #default="{ row }">{{ fmt(row.stddevExecTimeMs) }}</template></el-table-column>
-          <el-table-column label="共享读块" width="110"><template #default="{ row }">{{ fmt(row.sharedRead, 0) }}</template></el-table-column>
-          <el-table-column label="临时写块" width="110"><template #default="{ row }">{{ fmt(row.tempWritten, 0) }}</template></el-table-column>
-          <el-table-column label="I/O读(ms)" width="110"><template #default="{ row }">{{ row.blockReadTimeMs == null ? '未启用' : fmt(row.blockReadTimeMs) }}</template></el-table-column>
-          <el-table-column label="WAL" width="100"><template #default="{ row }">{{ bytes(row.walBytes) }}</template></el-table-column>
-          <el-table-column label="操作" fixed="right" width="100"><template #default="{ row }"><el-button link type="primary" @click="openPlan(row)">执行计划</el-button></template></el-table-column>
-        </el-table>
-      </el-tab-pane>
-      <el-tab-pane label="性能回退" name="regressions">
-        <el-alert type="info" :closable="false" title="基于最近 2 小时与过去 4 周相同星期、小时段对比；事件会保留证据和基线窗口。" class="tip" />
-        <el-table :data="regressions" v-loading="regressionLoading" border stripe height="430">
-          <el-table-column prop="database" label="数据库" width="130" />
-          <el-table-column prop="queryText" label="SQL" min-width="360" show-overflow-tooltip />
-          <el-table-column prop="type" label="类型" width="150" />
-          <el-table-column label="等级" width="90"><template #default="{ row }"><el-tag :type="row.severity === 'critical' ? 'danger' : 'warning'">{{ row.severity }}</el-tag></template></el-table-column>
-          <el-table-column label="基线→当前" width="180"><template #default="{ row }">{{ fmt(row.baselineValue) }} → {{ fmt(row.currentValue) }}</template></el-table-column>
-          <el-table-column label="变化" width="100"><template #default="{ row }">{{ row.changeRatio == null ? '-' : `${fmt(row.changeRatio * 100)}%` }}</template></el-table-column>
-          <el-table-column prop="detectedAt" label="发现时间" width="180" />
-        </el-table>
-      </el-tab-pane>
-    </el-tabs>
-  </el-card>
-
-  <el-dialog v-model="planVisible" title="安全执行计划（仅 EXPLAIN，不执行 ANALYZE）" width="820px">
-    <el-input v-model="planSql" type="textarea" :rows="7" placeholder="仅支持无需绑定参数的 SELECT / WITH / TABLE 语句" />
-    <template #footer><el-button @click="planVisible = false">取消</el-button><el-button type="primary" :loading="planLoading" @click="capturePlan">采集计划</el-button></template>
-    <el-divider v-if="plans.length">历史版本</el-divider>
-    <el-table v-if="plans.length" :data="plans" border max-height="260">
-      <el-table-column prop="capturedAt" label="采集时间" width="190" />
-      <el-table-column prop="planHash" label="Plan Hash" min-width="220" show-overflow-tooltip />
-      <el-table-column label="变化" width="90"><template #default="{ row }"><el-tag :type="row.planChanged ? 'warning' : 'success'">{{ row.planChanged ? '已变化' : '未变化' }}</el-tag></template></el-table-column>
-      <el-table-column label="节点" width="80"><template #default="{ row }">{{ row.nodeSummary?.length ?? 0 }}</template></el-table-column>
-    </el-table>
-  </el-dialog>
+  <div class="analytics-panel">
+    <el-card shadow="never" class="analytics-card">
+      <el-tabs v-model="tab" @tab-change="loadActive">
+        <el-tab-pane label="Query Analytics" name="analytics">
+          <ProTable :data="analytics" :columns="analyticsColumns" :loading="loading" :show-add="false" :total="analyticsTotal" v-model:page-num="analyticsPage.pageNum" v-model:page-size="analyticsPage.pageSize" :page-sizes="[10,20,50,100]" collapsible default-collapsed embedded class="inner-table" @search="searchAnalytics" @reset="resetAnalytics" @page-change="loadAnalytics">
+            <template #search>
+              <el-form-item label="数据库"><el-input v-model="database" clearable placeholder="全部" /></el-form-item>
+              <el-form-item label="用户"><el-input v-model="user" clearable placeholder="全部" /></el-form-item>
+              <el-form-item label="Query ID"><el-input v-model="queryId" clearable placeholder="全部" style="width:170px" /></el-form-item>
+              <el-form-item label="时间范围"><el-date-picker v-model="dateRange" type="datetimerange" range-separator="至" start-placeholder="开始" end-placeholder="结束" /></el-form-item>
+              <el-form-item label="排序"><el-select v-model="sortBy" style="width:150px"><el-option label="总执行时间" value="totalExecTimeMs"/><el-option label="平均耗时" value="avgExecTimeMs"/><el-option label="调用次数" value="calls"/><el-option label="临时块写入" value="tempWritten"/><el-option label="WAL 字节" value="walBytes"/></el-select></el-form-item>
+            </template>
+            <template #col-avg="{row}">{{fmt(row.avgExecTimeMs)}}</template><template #col-std="{row}">{{fmt(row.stddevExecTimeMs)}}</template><template #col-read="{row}">{{fmt(row.sharedRead,0)}}</template><template #col-temp="{row}">{{fmt(row.tempWritten,0)}}</template><template #col-io="{row}">{{row.blockReadTimeMs==null?'未启用':fmt(row.blockReadTimeMs)}}</template><template #col-wal="{row}">{{bytes(row.walBytes)}}</template>
+            <template #operation="{row}"><el-button link type="primary" @click.stop="openPlan(row as PgQueryAnalytics)">执行计划</el-button></template>
+          </ProTable>
+        </el-tab-pane>
+        <el-tab-pane label="性能回退" name="regressions">
+          <el-alert type="info" :closable="false" title="结论来自最近 2 小时与过去 4 周同星期、同时段对比，请结合业务发布记录判断。" class="tip" />
+          <ProTable :data="regressions" :columns="regressionColumns" :loading="regressionLoading" :show-add="false" :show-operation="false" :total="regressionTotal" v-model:page-num="regressionPage.pageNum" v-model:page-size="regressionPage.pageSize" :page-sizes="[10,20,50,100]" embedded class="inner-table" @search="searchRegressions" @page-change="loadRegressions">
+            <template #col-severity="{row}"><DictTag dict="pg_operation_severity" :value="row.severity" /></template><template #col-baseline="{row}">{{fmt(row.baselineValue)}} → {{fmt(row.currentValue)}}</template><template #col-change="{row}">{{row.changeRatio==null?'-':`${fmt(row.changeRatio*100)}%`}}</template>
+          </ProTable>
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
+    <CrudDrawer ref="planDrawerRef" v-model:visible="planVisible" mode="create" title="安全执行计划" size="860px" :confirm-on-save="false" @save="capturePlan">
+      <el-alert type="info" :closable="false" title="仅执行 EXPLAIN，不执行 ANALYZE；不会真正运行 SQL。" class="tip" />
+      <el-input v-model="planSql" type="textarea" :rows="7" placeholder="仅支持无需绑定参数的 SELECT / WITH / TABLE 语句" />
+      <div class="history-title">历史版本</div>
+      <ProTable :data="plans" :columns="planColumns" :loading="planLoading" :show-toolbar="false" :show-operation="false" :show-pagination="false" embedded class="inner-table">
+        <template #col-change="{row}"><DictTag dict="pg_plan_change_status" :value="row.planChanged?'changed':'unchanged'" /></template><template #col-nodes="{row}">{{row.nodeSummary?.length??0}}</template>
+      </ProTable>
+    </CrudDrawer>
+  </div>
 </template>
-
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { useInstanceStore } from '@/stores/instance'
-import { capturePgPlan, listPgPlanHistory, listPgQueryAnalytics, listPgSqlRegressions } from '@/api/postgresql'
-import type { PgPlanHistory, PgQueryAnalytics, PgSqlRegression } from '@/api/postgresql'
-
-const instanceStore = useInstanceStore()
-const instanceId = computed(() => instanceStore.current?.id)
-const tab = ref('analytics')
-const database = ref('')
-const user = ref('')
-const queryId = ref('')
-const dateRange = ref<[Date, Date]>([new Date(Date.now() - 7 * 86400000), new Date()])
-const sortBy = ref('totalExecTimeMs')
-const loading = ref(false)
-const regressionLoading = ref(false)
-const analytics = ref<PgQueryAnalytics[]>([])
-const regressions = ref<PgSqlRegression[]>([])
-const planVisible = ref(false)
-const planLoading = ref(false)
-const planSql = ref('')
-const planRow = ref<PgQueryAnalytics>()
-const plans = ref<PgPlanHistory[]>([])
-
-async function loadAnalytics() {
-  if (!instanceId.value) return
-  loading.value = true
-  try { analytics.value = await listPgQueryAnalytics({ instanceId: instanceId.value, database: database.value || undefined, user: user.value || undefined, queryId: queryId.value || undefined, from: dateRange.value?.[0]?.toISOString(), to: dateRange.value?.[1]?.toISOString(), sortBy: sortBy.value, limit: 200 }) } finally { loading.value = false }
-}
-async function loadRegressions() {
-  if (!instanceId.value) return
-  regressionLoading.value = true
-  try { regressions.value = await listPgSqlRegressions(instanceId.value) } finally { regressionLoading.value = false }
-}
-function loadActive(name: string | number) { if (name === 'regressions') loadRegressions(); else loadAnalytics() }
-async function openPlan(row: any) {
-  planRow.value = row; planSql.value = row.queryText; planVisible.value = true
-  if (instanceId.value) plans.value = await listPgPlanHistory(instanceId.value, row.database, row.queryId)
-}
-async function capturePlan() {
-  if (!instanceId.value || !planRow.value) return
-  planLoading.value = true
-  try {
-    await capturePgPlan(instanceId.value, planRow.value.database, planRow.value.queryId, planSql.value)
-    plans.value = await listPgPlanHistory(instanceId.value, planRow.value.database, planRow.value.queryId)
-    ElMessage.success('执行计划已采集')
-  } finally { planLoading.value = false }
-}
-function fmt(v?: number, digits = 2) { return v == null ? '-' : Number(v).toFixed(digits) }
-function bytes(v: number) { if (!v) return '0 B'; const u = ['B', 'KB', 'MB', 'GB']; const i = Math.min(Math.floor(Math.log(v) / Math.log(1024)), 3); return `${(v / 1024 ** i).toFixed(1)} ${u[i]}` }
-watch(instanceId, () => loadAnalytics(), { immediate: true })
+import {computed,reactive,ref,watch} from 'vue';import{ElMessage}from'element-plus';import{useInstanceStore}from'@/stores/instance';import{capturePgPlan,listPgPlanHistory,listPgQueryAnalytics,listPgSqlRegressions}from'@/api/postgresql';import type{PgPlanHistory,PgQueryAnalytics,PgSqlRegression}from'@/api/postgresql';import ProTable from '@/components/ProTable/index.vue';import CrudDrawer from '@/components/ProTable/CrudDrawer.vue';import DictTag from '@/components/DictTag.vue';import type{TableColumn}from'@/components/ProTable/types'
+const instanceId=computed(()=>useInstanceStore().current?.id),tab=ref('analytics'),database=ref(''),user=ref(''),queryId=ref(''),dateRange=ref<[Date,Date]>([new Date(Date.now()-7*86400000),new Date()]),sortBy=ref('totalExecTimeMs'),loading=ref(false),regressionLoading=ref(false),analytics=ref<PgQueryAnalytics[]>([]),regressions=ref<PgSqlRegression[]>([]),planVisible=ref(false),planLoading=ref(false),planSql=ref(''),planRow=ref<PgQueryAnalytics>(),plans=ref<PgPlanHistory[]>([]),planDrawerRef=ref<InstanceType<typeof CrudDrawer>>()
+const analyticsPage=reactive({pageNum:1,pageSize:20}),regressionPage=reactive({pageNum:1,pageSize:20}),analyticsTotal=ref(0),regressionTotal=ref(0)
+const analyticsColumns:TableColumn[]=[{prop:'database',label:'数据库',width:130},{prop:'user',label:'用户',width:120},{prop:'queryText',label:'SQL',minWidth:340},{prop:'calls',label:'调用',width:90,sortable:true},{label:'平均耗时(ms)',width:130,slot:'col-avg'},{label:'波动(ms)',width:115,slot:'col-std'},{label:'共享读块',width:110,slot:'col-read'},{label:'临时写块',width:110,slot:'col-temp'},{label:'I/O读(ms)',width:110,slot:'col-io'},{label:'WAL',width:100,slot:'col-wal'}]
+const regressionColumns:TableColumn[]=[{prop:'database',label:'数据库',width:130},{prop:'queryText',label:'SQL',minWidth:360},{prop:'type',label:'回退类型',width:150},{label:'风险状态',width:100,slot:'col-severity'},{label:'基线 → 当前',width:180,slot:'col-baseline'},{label:'变化',width:100,slot:'col-change'},{prop:'detectedAt',label:'发现时间',width:180}]
+const planColumns:TableColumn[]=[{prop:'capturedAt',label:'采集时间',width:190},{prop:'planHash',label:'Plan Hash',minWidth:220},{label:'计划变化',width:110,slot:'col-change'},{label:'节点数',width:90,slot:'col-nodes'}]
+async function loadAnalytics(){if(!instanceId.value)return;loading.value=true;try{const page=await listPgQueryAnalytics({instanceId:instanceId.value,database:database.value||undefined,user:user.value||undefined,queryId:queryId.value||undefined,from:dateRange.value?.[0]?.toISOString(),to:dateRange.value?.[1]?.toISOString(),sortBy:sortBy.value,pageNum:analyticsPage.pageNum,pageSize:analyticsPage.pageSize});analytics.value=page.list??[];analyticsTotal.value=page.total??0}finally{loading.value=false}}
+async function loadRegressions(){if(!instanceId.value)return;regressionLoading.value=true;try{const page=await listPgSqlRegressions(instanceId.value,regressionPage.pageNum,regressionPage.pageSize);regressions.value=page.list??[];regressionTotal.value=page.total??0}finally{regressionLoading.value=false}}
+function searchAnalytics(){analyticsPage.pageNum=1;loadAnalytics()}function searchRegressions(){regressionPage.pageNum=1;loadRegressions()}
+function loadActive(name:string|number){name==='regressions'?loadRegressions():loadAnalytics()}function resetAnalytics(){database.value='';user.value='';queryId.value='';dateRange.value=[new Date(Date.now()-7*86400000),new Date()];sortBy.value='totalExecTimeMs';analyticsPage.pageNum=1;loadAnalytics()}
+async function openPlan(row:PgQueryAnalytics){planRow.value=row;planSql.value=row.queryText;planVisible.value=true;if(instanceId.value)plans.value=await listPgPlanHistory(instanceId.value,row.database,row.queryId)}
+async function capturePlan(){if(!instanceId.value||!planRow.value)return;planLoading.value=true;try{await capturePgPlan(instanceId.value,planRow.value.database,planRow.value.queryId,planSql.value);plans.value=await listPgPlanHistory(instanceId.value,planRow.value.database,planRow.value.queryId);planDrawerRef.value?.stopSaving(false);ElMessage.success('执行计划已安全采集')}catch(e){planDrawerRef.value?.stopSaving(false);throw e}finally{planLoading.value=false}}
+function fmt(v?:number,digits=2){return v==null?'-':Number(v).toFixed(digits)}function bytes(v:number){if(!v)return'0 B';const u=['B','KB','MB','GB'];const i=Math.min(Math.floor(Math.log(v)/Math.log(1024)),3);return`${(v/1024**i).toFixed(1)} ${u[i]}`}watch(instanceId,()=>{analyticsPage.pageNum=1;regressionPage.pageNum=1;loadAnalytics()},{immediate:true})
 </script>
-
-<style scoped>.analytics-card{margin-top:16px}.filters{margin-bottom:4px}.tip{margin-bottom:12px}</style>
+<style scoped>.analytics-card{margin-top:16px}.tip{margin-bottom:12px}.history-title{font-weight:600;margin:18px 0 8px}</style>

@@ -90,6 +90,8 @@
           </div>
         </div>
       </el-card>
+      <PgOperationsPanel kind="replication" title="逻辑复制与表同步快照" category="logical_replication" />
+      <PgOperationsPanel kind="replication" title="物理复制、WAL Receiver 与恢复冲突快照" category="replication" />
     </template>
   </div>
 </template>
@@ -101,6 +103,7 @@ import { useInstanceStore } from '@/stores/instance'
 import InstanceEmpty from '@/components/InstanceEmpty.vue'
 import ProTable from '@/components/ProTable/index.vue'
 import TrendChart from '@/components/TrendChart.vue'
+import PgOperationsPanel from '../components/PgOperationsPanel.vue'
 import { getMetricTrend, getMetricLatest, getMetricObjects } from '@/api/metric'
 import { PG } from '@/constants/pg-metrics'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'

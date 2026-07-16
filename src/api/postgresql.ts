@@ -1,4 +1,5 @@
 import request from './request'
+import type { PageResult } from '@/types'
 
 export interface PgDatabase {
   name: string
@@ -53,6 +54,8 @@ export interface PgSessionQuery {
   state?: string
   waitEventType?: string
   minDurationSeconds?: number
+  pageNum: number
+  pageSize: number
 }
 
 export function listPgDatabases(instanceId: number) {
@@ -60,7 +63,7 @@ export function listPgDatabases(instanceId: number) {
 }
 
 export function listPgSessions(data: PgSessionQuery) {
-  return request<PgSession[]>({ url: '/v1/postgresql/sessions', method: 'post', data })
+  return request<PageResult<PgSession>>({ url: '/v1/postgresql/sessions', method: 'post', data })
 }
 
 export function getPgBlockingTree(instanceId: number) {
@@ -83,7 +86,8 @@ export interface PgQueryAnalyticsQuery {
   to?: string
   sortBy?: string
   sortDirection?: 'asc' | 'desc'
-  limit?: number
+  pageNum: number
+  pageSize: number
 }
 
 export interface PgQueryAnalytics {
@@ -164,11 +168,11 @@ export interface PgObjectAnalysis {
 }
 
 export function listPgQueryAnalytics(data: PgQueryAnalyticsQuery) {
-  return request<PgQueryAnalytics[]>({ url: '/v1/postgresql/query-analytics', method: 'post', data })
+  return request<PageResult<PgQueryAnalytics>>({ url: '/v1/postgresql/query-analytics', method: 'post', data })
 }
 
-export function listPgSqlRegressions(instanceId: number) {
-  return request<PgSqlRegression[]>({ url: '/v1/postgresql/sql-regressions', method: 'post', data: { id: instanceId } })
+export function listPgSqlRegressions(instanceId: number, pageNum: number, pageSize: number) {
+  return request<PageResult<PgSqlRegression>>({ url: '/v1/postgresql/sql-regressions', method: 'post', data: { instanceId, pageNum, pageSize } })
 }
 
 export function capturePgPlan(instanceId: number, database: string, queryId: string, sql: string) {
@@ -187,6 +191,85 @@ export function listPgIndexAdvice(instanceId: number) {
   return request<PgAdvisor[]>({ url: '/v1/postgresql/index-advisor', method: 'post', data: { id: instanceId } })
 }
 
-export function listPgObjectAnalysis(instanceId: number) {
-  return request<PgObjectAnalysis[]>({ url: '/v1/postgresql/objects', method: 'post', data: { id: instanceId } })
+export function listPgObjectAnalysis(instanceId: number, pageNum: number, pageSize: number) {
+  return request<PageResult<PgObjectAnalysis>>({ url: '/v1/postgresql/objects', method: 'post', data: { instanceId, pageNum, pageSize } })
+}
+export type PgOperationKind = 'replication' | 'backups' | 'progress' | 'timeline'
+export interface PgOperationalEventQuery {
+  instanceId: number
+  category?: string
+  sqlState?: string
+  database?: string
+  user?: string
+  keyword?: string
+  from?: string
+  to?: string
+  pageNum: number
+  pageSize: number
+}
+export interface PgOperationalEvent {
+  id: number
+  source: string
+  category: string
+  eventType: string
+  severity: string
+  database?: string
+  user?: string
+  objectName?: string
+  queryId?: string
+  sqlState?: string
+  message?: string
+  fingerprint?: string
+  payload: Record<string, unknown>
+  sensitiveRedacted: boolean
+  eventTime: string
+}
+export interface PgOperationalSummary {
+  category: string
+  eventType: string
+  severity: string
+  eventCount: number
+  fingerprintCount: number
+  lastSeen: string
+  conclusion: string
+  possibleCause: string
+  impact: string
+  action: string
+}
+export interface PgOperationalHealth {
+  severity: string
+  conclusion: string
+  riskCount: number
+  affectedObjectCount: number
+  lastSeen?: string
+  risks: PgOperationalSummary[]
+}
+export interface PgRestoreDrill {
+  id?: number
+  instanceId?: number
+  backupId?: string
+  targetTime?: string
+  startedAt: string
+  finishedAt?: string
+  status: string
+  validationResult: string
+  durationSeconds?: number
+  ownerName: string
+  notes?: string
+  createdAt?: string
+}
+export function listPgOperationalEvents(kind: PgOperationKind, data: PgOperationalEventQuery) {
+  return request<PageResult<PgOperationalEvent>>({ url: `/v1/postgresql/operations/${kind}`, method: 'post', data })
+}
+export function getPgOperationalHealth(instanceId: number) {
+  return request<PgOperationalHealth>({ url: '/v1/postgresql/operations/health', method: 'post', data: { id: instanceId } })
+}
+export function listPgOperationalSummary(instanceId: number) {
+  return request<PgOperationalSummary[]>({ url: '/v1/postgresql/operations/summary', method: 'post', data: { id: instanceId } })
+}
+export function listPgRestoreDrills(instanceId: number, pageNum: number, pageSize: number) {
+  return request<PageResult<PgRestoreDrill>>({ url: '/v1/postgresql/restore-drills', method: 'post', data: { instanceId, pageNum, pageSize } })
+}
+export function savePgRestoreDrill(data: PgRestoreDrill) {
+  return request<PgRestoreDrill>({ url: '/v1/postgresql/restore-drills/save', method: 'post', data })
 }

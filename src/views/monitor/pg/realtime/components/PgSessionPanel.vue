@@ -1,124 +1,69 @@
 <template>
   <el-card shadow="never" class="diagnostic-card">
-    <template #header><div class="header"><span>实时会话与阻塞诊断</span><el-button size="small" :loading="loading" @click="loadAll">刷新现场</el-button></div></template>
+    <template #header>
+      <div class="header">
+        <div><div>实时会话与阻塞诊断</div><small>先看结论，再按需展开 SQL 和技术字段；高风险操作必须填写原因。</small></div>
+        <el-button size="small" :loading="loading" @click="loadAll">刷新现场</el-button>
+      </div>
+    </template>
     <el-tabs v-model="tab">
       <el-tab-pane label="实时会话" name="sessions">
-        <el-form :inline="true" :model="filters" class="filters">
-          <el-form-item label="数据库"><el-input v-model="filters.database" clearable /></el-form-item>
-          <el-form-item label="用户"><el-input v-model="filters.user" clearable /></el-form-item>
-          <el-form-item label="状态"><el-input v-model="filters.state" clearable /></el-form-item>
-          <el-form-item label="等待类型"><el-input v-model="filters.waitEventType" clearable /></el-form-item>
-          <el-form-item><el-button type="primary" @click="loadSessions">查询</el-button></el-form-item>
-        </el-form>
-        <el-table :data="sessions" v-loading="loading" max-height="460" stripe>
-          <el-table-column prop="pid" label="PID" width="90" fixed />
-          <el-table-column prop="database" label="数据库" min-width="110" />
-          <el-table-column prop="user" label="用户" min-width="100" />
-          <el-table-column prop="application" label="应用" min-width="130" show-overflow-tooltip />
-          <el-table-column prop="clientAddress" label="客户端" min-width="125" />
-          <el-table-column prop="state" label="状态" width="130" />
-          <el-table-column label="持续时间" width="100"><template #default="{ row }">{{ formatDuration(row.durationSeconds) }}</template></el-table-column>
-          <el-table-column label="等待事件" min-width="150"><template #default="{ row }">{{ [row.waitEventType, row.waitEvent].filter(Boolean).join(':') || '—' }}</template></el-table-column>
-          <el-table-column label="阻塞者" min-width="120"><template #default="{ row }"><el-tag v-if="row.rootBlocker" type="danger">根阻塞者</el-tag><span v-else>{{ row.blockedBy?.join(', ') || '—' }}</span></template></el-table-column>
-          <el-table-column prop="query" label="SQL" min-width="320" show-overflow-tooltip />
-          <el-table-column label="操作" width="260" fixed="right"><template #default="{ row }">
-            <el-button link @click="copyText(String(row.pid), 'PID')">复制 PID</el-button>
-            <el-button link :disabled="!row.query" @click="copyText(row.query || '', 'SQL')">复制 SQL</el-button>
-            <el-button v-permission="'pg_session:cancel'" link type="warning" @click="act(row as PgSession, false)">取消</el-button>
-            <el-button v-permission="'pg_session:terminate'" link type="danger" @click="act(row as PgSession, true)">终止</el-button>
-          </template></el-table-column>
-        </el-table>
+        <ProTable
+          v-model:page-num="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :data="sessions"
+          :columns="sessionColumns"
+          :loading="loading"
+          :total="total"
+          :page-sizes="[10,20,50,100]"
+          collapsible
+          default-collapsed
+          :show-add="false"
+          embedded
+          class="inner-table"
+          @search="searchSessions"
+          @reset="resetFilters"
+          @page-change="loadSessions"
+        >
+          <template #search>
+            <el-form-item label="数据库"><el-input v-model="filters.database" clearable /></el-form-item>
+            <el-form-item label="用户"><el-input v-model="filters.user" clearable /></el-form-item>
+            <el-form-item label="会话状态"><el-input v-model="filters.state" clearable /></el-form-item>
+            <el-form-item label="等待类型"><el-input v-model="filters.waitEventType" clearable /></el-form-item>
+          </template>
+          <template #col-duration="{row}">{{formatDuration(row.durationSeconds)}}</template>
+          <template #col-wait="{row}">{{[row.waitEventType,row.waitEvent].filter(Boolean).join(':')||'无等待'}}</template>
+          <template #col-blocker="{row}"><el-tag v-if="row.rootBlocker" type="danger">根阻塞者</el-tag><span v-else>{{row.blockedBy?.join(', ')||'未被阻塞'}}</span></template>
+          <template #operation="{row}"><el-button link @click.stop="copyText(String(row.pid),'PID')">复制 PID</el-button><el-button link :disabled="!row.query" @click.stop="copyText(row.query||'','SQL')">复制 SQL</el-button><el-button v-permission="'pg_session:cancel'" link type="warning" @click.stop="act(row as PgSession,false)">取消查询</el-button><el-button v-permission="'pg_session:terminate'" link type="danger" @click.stop="act(row as PgSession,true)">终止会话</el-button></template>
+        </ProTable>
       </el-tab-pane>
-      <el-tab-pane :label="'阻塞树 (' + trees.length + ')'" name="blocking">
-        <el-alert v-if="!trees.length" type="success" :closable="false" title="当前未检测到会话阻塞" />
-        <el-table v-else :data="trees" row-key="pid" default-expand-all max-height="460">
-          <el-table-column prop="pid" label="阻塞关系 / PID" width="180" />
-          <el-table-column prop="database" label="数据库" width="110" />
-          <el-table-column prop="user" label="用户" width="100" />
-          <el-table-column prop="application" label="应用" min-width="130" show-overflow-tooltip />
-          <el-table-column label="影响会话" width="100"><template #default="{ row }"><el-tag type="danger">{{ row.affectedSessions }}</el-tag></template></el-table-column>
-          <el-table-column label="持续时间" width="100"><template #default="{ row }">{{ formatDuration(row.durationSeconds) }}</template></el-table-column>
-          <el-table-column label="锁对象" min-width="180"><template #default="{ row }">{{ row.lockedObjects?.join(', ') || '—' }}</template></el-table-column>
-          <el-table-column prop="query" label="SQL" min-width="360" show-overflow-tooltip />
-        </el-table>
+      <el-tab-pane :label="`阻塞树 (${trees.length})`" name="blocking">
+        <el-alert v-if="!trees.length" type="success" :closable="false" title="数据库运行正常：当前未检测到会话阻塞" />
+        <ProTable v-else :data="trees" :columns="treeColumns" :loading="loading" row-key="pid" :tree-props="{children:'children'}" default-expand-all :show-toolbar="false" :show-operation="false" :show-pagination="false" embedded class="inner-table">
+          <template #col-affected="{row}"><el-tag type="danger">{{row.affectedSessions}}</el-tag></template><template #col-duration="{row}">{{formatDuration(row.durationSeconds)}}</template><template #col-objects="{row}">{{row.lockedObjects?.join(', ')||'未识别'}}</template>
+        </ProTable>
       </el-tab-pane>
-      <el-tab-pane :label="'能力检测 (' + capabilities.length + ')'" name="capabilities">
-        <el-table :data="capabilities" max-height="460">
-          <el-table-column prop="name" label="能力" min-width="220" />
-          <el-table-column label="状态" width="120"><template #default="{ row }"><DictTag dict="capability_status" :value="row.status" size="small" /></template></el-table-column>
-          <el-table-column prop="message" label="检测结果与建议" min-width="420"><template #default="{ row }">{{ row.message || '已满足' }}</template></el-table-column>
-        </el-table>
+      <el-tab-pane :label="`能力检测 (${capabilities.length})`" name="capabilities">
+        <ProTable :data="capabilities" :columns="capabilityColumns" :show-toolbar="false" :show-operation="false" :show-pagination="false" embedded class="inner-table"><template #col-status="{row}"><DictTag dict="capability_status" :value="row.status" /></template><template #col-message="{row}">{{row.message||'能力已满足，无需处理'}}</template></ProTable>
       </el-tab-pane>
-      <el-tab-pane :label="'数据库覆盖 (' + databases.length + ')'" name="databases">
-        <el-table :data="databases" max-height="420">
-          <el-table-column prop="name" label="数据库" min-width="180" />
-          <el-table-column label="容量" width="140"><template #default="{ row }">{{ formatBytes(row.sizeBytes) }}</template></el-table-column>
-          <el-table-column label="允许连接" width="110"><template #default="{ row }"><el-tag :type="row.allowConnections ? 'success' : 'info'">{{ row.allowConnections ? '是' : '否' }}</el-tag></template></el-table-column>
-          <el-table-column label="账号可连接" width="120"><template #default="{ row }"><el-tag :type="row.connectable ? 'success' : 'danger'">{{ row.connectable ? '是' : '否' }}</el-tag></template></el-table-column>
-          <el-table-column label="对象采集范围" width="140"><template #default="{ row }"><el-tag :type="row.inScope ? 'primary' : 'info'">{{ row.inScope ? '已纳入' : '未纳入' }}</el-tag></template></el-table-column>
-        </el-table>
+      <el-tab-pane :label="`数据库覆盖 (${databases.length})`" name="databases">
+        <ProTable :data="databases" :columns="databaseColumns" :show-toolbar="false" :show-operation="false" :show-pagination="false" embedded class="inner-table"><template #col-size="{row}">{{formatBytes(row.sizeBytes)}}</template><template #col-allow="{row}"><DictTag dict="common_boolean" :value="String(row.allowConnections)" /></template><template #col-connect="{row}"><DictTag dict="common_boolean" :value="String(row.connectable)" /></template><template #col-scope="{row}"><DictTag dict="common_boolean" :value="String(row.inScope)" /></template></ProTable>
       </el-tab-pane>
     </el-tabs>
   </el-card>
 </template>
-
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { cancelPgSession, getPgBlockingTree, listPgDatabases, listPgSessions, terminatePgSession, type PgBlockingNode, type PgDatabase, type PgSession } from '@/api/postgresql'
-import { getInstanceCapabilities, type InstanceCapability } from '@/api/instance'
-import DictTag from '@/components/DictTag.vue'
-
-const props = defineProps<{ instanceId: number }>()
-const tab = ref('sessions')
-const loading = ref(false)
-const sessions = ref<PgSession[]>([])
-const trees = ref<PgBlockingNode[]>([])
-const databases = ref<PgDatabase[]>([])
-const capabilities = ref<InstanceCapability[]>([])
-const filters = reactive({ database: '', user: '', state: '', waitEventType: '' })
-
-async function loadSessions() { sessions.value = await listPgSessions({ instanceId: props.instanceId, ...filters }) }
-async function loadAll() {
-  loading.value = true
-  try {
-    const [s, t, d, c] = await Promise.allSettled([listPgSessions({ instanceId: props.instanceId, ...filters }), getPgBlockingTree(props.instanceId), listPgDatabases(props.instanceId), getInstanceCapabilities(props.instanceId)])
-    sessions.value = s.status === 'fulfilled' ? s.value : []
-    trees.value = t.status === 'fulfilled' ? t.value : []
-    databases.value = d.status === 'fulfilled' ? d.value : []
-    capabilities.value = c.status === 'fulfilled' ? c.value : []
-  } finally { loading.value = false }
-}
-async function act(row: PgSession, terminate: boolean) {
-  const verb = terminate ? '终止会话' : '取消查询'
-  const context = 'PID ' + row.pid + '；数据库 ' + (row.database || '—') + '；用户 ' + (row.user || '—') + '；应用 ' + (row.application || '—') + '；客户端 ' + (row.clientAddress || '—') + '；持续 ' + formatDuration(row.durationSeconds) + '。'
-  if (terminate) {
-    await ElMessageBox.confirm(context + ' 未提交事务将回滚，请再次确认业务影响。', '终止会话二次确认', { type: 'warning', confirmButtonText: '继续填写原因' })
-  }
-  const { value } = await ElMessageBox.prompt(context + (terminate ? ' 请填写终止原因。' : ' 数据库将尝试取消当前语句。'), verb, { inputPlaceholder: '请输入操作原因', inputValidator: v => !!v?.trim() || '操作原因不能为空', type: 'warning' })
-  if (terminate) await terminatePgSession(props.instanceId, row.pid, value.trim())
-  else await cancelPgSession(props.instanceId, row.pid, value.trim())
-  ElMessage.success(verb + '请求已执行')
-  await loadAll()
-}
-async function copyText(value: string, label: string) {
-  await navigator.clipboard.writeText(value)
-  ElMessage.success(label + ' 已复制')
-}
-function formatDuration(seconds: number) {
-  if (seconds < 60) return seconds + 's'
-  if (seconds < 3600) return Math.floor(seconds / 60) + 'm'
-  return Math.floor(seconds / 3600) + 'h ' + Math.floor(seconds % 3600 / 60) + 'm'
-}
-function formatBytes(value: number) {
-  if (value < 1024 ** 2) return (value / 1024).toFixed(1) + ' KB'
-  if (value < 1024 ** 3) return (value / 1024 ** 2).toFixed(1) + ' MB'
-  return (value / 1024 ** 3).toFixed(2) + ' GB'
-}
-watch(() => props.instanceId, loadAll, { immediate: true })
+import{reactive,ref,watch}from'vue';import{ElMessage,ElMessageBox}from'element-plus';import{cancelPgSession,getPgBlockingTree,listPgDatabases,listPgSessions,terminatePgSession,type PgBlockingNode,type PgDatabase,type PgSession}from'@/api/postgresql';import{getInstanceCapabilities,type InstanceCapability}from'@/api/instance';import DictTag from '@/components/DictTag.vue';import ProTable from '@/components/ProTable/index.vue';import type{TableColumn}from'@/components/ProTable/types'
+const props=defineProps<{instanceId:number}>(),tab=ref('sessions'),loading=ref(false),sessions=ref<PgSession[]>([]),total=ref(0),trees=ref<PgBlockingNode[]>([]),databases=ref<PgDatabase[]>([]),capabilities=ref<InstanceCapability[]>([])
+const filters=reactive({database:'',user:'',state:'',waitEventType:''}),pagination=reactive({pageNum:1,pageSize:20})
+const sessionColumns:TableColumn[]=[{prop:'pid',label:'PID',width:90,fixed:'left'},{prop:'database',label:'数据库',minWidth:110},{prop:'user',label:'用户',minWidth:100},{prop:'application',label:'应用',minWidth:130},{prop:'clientAddress',label:'客户端',width:125},{prop:'state',label:'数据库状态',width:130},{label:'持续时间',width:100,slot:'col-duration'},{label:'等待结论',minWidth:150,slot:'col-wait'},{label:'阻塞结论',minWidth:130,slot:'col-blocker'},{prop:'query',label:'SQL（高级信息）',minWidth:320}]
+const treeColumns:TableColumn[]=[{prop:'pid',label:'阻塞关系 / PID',width:180},{prop:'database',label:'数据库',width:110},{prop:'user',label:'用户',width:100},{prop:'application',label:'应用',minWidth:130},{label:'影响会话',width:100,slot:'col-affected'},{label:'持续时间',width:100,slot:'col-duration'},{label:'锁对象',minWidth:180,slot:'col-objects'},{prop:'query',label:'SQL（高级信息）',minWidth:360}]
+const capabilityColumns:TableColumn[]=[{prop:'name',label:'监控能力',minWidth:220},{label:'状态',width:120,slot:'col-status'},{label:'检测结论与建议',minWidth:420,slot:'col-message'}]
+const databaseColumns:TableColumn[]=[{prop:'name',label:'数据库',minWidth:180},{label:'容量',width:140,slot:'col-size'},{label:'允许连接',width:110,slot:'col-allow'},{label:'账号可连接',width:120,slot:'col-connect'},{label:'已纳入采集',width:140,slot:'col-scope'}]
+async function loadSessions(){loading.value=true;try{const page=await listPgSessions({instanceId:props.instanceId,...filters,pageNum:pagination.pageNum,pageSize:pagination.pageSize});sessions.value=page.list??[];total.value=page.total??0}finally{loading.value=false}}
+async function loadAll(){loading.value=true;try{const[s,t,d,c]=await Promise.allSettled([listPgSessions({instanceId:props.instanceId,...filters,pageNum:pagination.pageNum,pageSize:pagination.pageSize}),getPgBlockingTree(props.instanceId),listPgDatabases(props.instanceId),getInstanceCapabilities(props.instanceId)]);sessions.value=s.status==='fulfilled'?(s.value.list??[]):[];total.value=s.status==='fulfilled'?(s.value.total??0):0;trees.value=t.status==='fulfilled'?t.value:[];databases.value=d.status==='fulfilled'?d.value:[];capabilities.value=c.status==='fulfilled'?c.value:[]}finally{loading.value=false}}
+function searchSessions(){pagination.pageNum=1;loadSessions()}function resetFilters(){Object.assign(filters,{database:'',user:'',state:'',waitEventType:''});pagination.pageNum=1;loadSessions()}
+async function act(row:PgSession,terminate:boolean){const verb=terminate?'终止会话':'取消查询',context='PID '+row.pid+'；数据库 '+(row.database||'—')+'；用户 '+(row.user||'—')+'；应用 '+(row.application||'—')+'；客户端 '+(row.clientAddress||'—')+'；持续 '+formatDuration(row.durationSeconds)+'。';if(terminate)await ElMessageBox.confirm(context+' 未提交事务将回滚，请再次确认业务影响。','终止会话二次确认',{type:'warning',confirmButtonText:'继续填写原因'});const{value}=await ElMessageBox.prompt(context+(terminate?' 请填写终止原因。':' 数据库将尝试取消当前语句。'),verb,{inputPlaceholder:'请输入操作原因',inputValidator:v=>!!v?.trim()||'操作原因不能为空',type:'warning'});terminate?await terminatePgSession(props.instanceId,row.pid,value.trim()):await cancelPgSession(props.instanceId,row.pid,value.trim());ElMessage.success(verb+'请求已执行');await loadAll()}
+async function copyText(value:string,label:string){await navigator.clipboard.writeText(value);ElMessage.success(label+' 已复制')}function formatDuration(s:number){if(s<60)return s+'秒';if(s<3600)return Math.floor(s/60)+'分钟';return Math.floor(s/3600)+'小时 '+Math.floor(s%3600/60)+'分钟'}function formatBytes(v:number){if(v<1024**2)return(v/1024).toFixed(1)+' KB';if(v<1024**3)return(v/1024**2).toFixed(1)+' MB';return(v/1024**3).toFixed(2)+' GB'}watch(()=>props.instanceId,()=>{pagination.pageNum=1;loadAll()},{immediate:true})
 </script>
-
-<style scoped>
-.header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
-.filters :deep(.el-input) { width: 130px; }
-</style>
+<style scoped>.header{display:flex;align-items:center;justify-content:space-between;font-weight:600}.header small{display:block;color:var(--el-text-color-secondary);font-weight:400;margin-top:4px}</style>

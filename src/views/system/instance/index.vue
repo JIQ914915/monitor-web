@@ -265,7 +265,7 @@ import { listUserOptions } from '@/api/user'
 import { listDbTypes } from '@/api/meta'
 import { listDictItems } from '@/api/dict'
 import { usePagination } from '@/composables/usePagination'
-import type { DbInstance, DbTypeOption, DbVersionOption, InstanceGroup, UserOption } from '@/types'
+import type { DbInstance, DbTypeOption, DbVersionOption, InstanceGroup, UserOption, SysDictItem } from '@/types'
 
 const columns: TableColumn[] = [
   { prop: 'name', label: '实例名称', minWidth: 170, fixed: 'left' },
@@ -278,6 +278,7 @@ const columns: TableColumn[] = [
   { prop: 'remark', label: '备注', minWidth: 140 },
 ]
 
+const pgObjectScopeOptions = ref<SysDictItem[]>([])
 const dbTypeOptions = ref<DbTypeOption[]>([])
 const dbTypeLoadError = ref(false)
 function typeOptionById(id?: number | null) {
@@ -301,6 +302,13 @@ function statusType(s: InstanceStatus): TagType {
 }
 function statusLabel(s: InstanceStatus): string {
   return statusMeta(s)?.label || s
+}
+
+async function loadPgConfigDicts() {
+  const [scope] = await Promise.all([
+    listDictItems('pg_object_scope')
+  ])
+  pgObjectScopeOptions.value = scope
 }
 
 async function loadStatusDict() {

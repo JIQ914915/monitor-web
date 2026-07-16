@@ -265,6 +265,7 @@ export interface DbInstance {
   pgObjectScope?: 'monitoring' | 'selected' | 'all'
   /** PG对象级采集选定数据库列表 */
   pgObjectDatabases?: string[]
+  /** PG 第三期只读外部数据源配置，不包含凭据 */
   /** 所在主机 ID（host.id，可空） */
   hostId?: number | null
   /** 所在主机名称（后端解析，只读） */
