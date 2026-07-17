@@ -28,11 +28,11 @@ export function deleteDbType(id: number) {
 
 // ===== 数据库版本管理 CRUD =====
 
-export function listDbVersions(dbType?: string) {
+export function listDbVersions(dbTypeId?: number) {
   return request<DatabaseVersionMgmt[]>({
     url: '/v1/database-versions/list',
     method: 'post',
-    data: dbType ? { dbType } : {}
+    data: dbTypeId ? { dbTypeId } : {}
   })
 }
 

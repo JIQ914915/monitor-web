@@ -107,7 +107,7 @@
                     v-for="type in dbTypeOptions"
                     :key="type.id"
                     :label="type.label"
-                    :value="type.code.toLowerCase()"
+                    :value="type.code"
                   />
                 </el-select>
               </el-form-item>
@@ -398,7 +398,7 @@ async function onSave() {
 
 onMounted(async () => {
   const [, types] = await Promise.all([load(), listDbTypes()])
-  dbTypeOptions.value = types.filter(type => ['MYSQL', 'POSTGRESQL'].includes(type.code.toUpperCase()))
+  dbTypeOptions.value = types.filter(type => ['MYSQL', 'POSTGRESQL', 'SQLSERVER'].includes(type.code.toUpperCase()))
 })
 </script>
 

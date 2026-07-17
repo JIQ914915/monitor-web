@@ -34,11 +34,11 @@ export interface MetricDefinitionOption {
   enabled: boolean | null
 }
 
-/** 查询指标定义列表（可按 dbType 过滤，如 mysql） */
-export function listMetricDefinitions(dbType?: string) {
+/** 查询指标定义列表（可按数据库类型ID过滤） */
+export function listMetricDefinitions(dbTypeId?: number) {
   return request<MetricDefinitionOption[]>({
-    url: '/v1/metric-definitions',
-    method: 'get',
-    params: dbType ? { dbType } : {}
+    url: '/v1/metric-definitions/list',
+    method: 'post',
+    data: dbTypeId ? { dbTypeId } : {}
   })
 }

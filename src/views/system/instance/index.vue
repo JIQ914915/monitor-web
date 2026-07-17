@@ -433,8 +433,8 @@ async function testConnection() {
     ElMessage.warning('请先填写主机地址和端口')
     return
   }
-  const typeCode = form.id ? undefined : typeOptionById(form.dbTypeId)?.code
-  if (!form.id && !typeCode) {
+  const dbTypeId = form.id ? undefined : form.dbTypeId ?? undefined
+  if (!form.id && !dbTypeId) {
     ElMessage.warning('请先选择数据库类型')
     return
   }
@@ -444,7 +444,7 @@ async function testConnection() {
   try {
     const result = await testInstanceConnection({
       instanceId: form.id || undefined,
-      dbType: typeCode,
+      dbTypeId,
       host: form.host,
       port: form.port,
       // PostgreSQL 建连必须指定库：优先用表单填写的监控库

@@ -399,7 +399,7 @@ export function mockAdapter<T>(config: AxiosRequestConfig): Promise<T> {
       MYSQL: '8.0.32', MySQL: '8.0.32', POSTGRESQL: '15.4', ORACLE: '19c', SQLSERVER: '2019'
     }
     return delay(({
-      version: verMap[String(body.dbType)] || 'unknown',
+      version: verMap[Number(body.dbTypeId)] || 'unknown',
       checks: [
         { name: 'PROCESS 权限', granted: true },
         { name: 'REPLICATION CLIENT 权限', granted: false, affected: '复制状态监控、binlog 容量统计', grantHint: "GRANT REPLICATION CLIENT ON *.* TO 'monitor'@'%';" },
@@ -508,7 +508,7 @@ export function mockAdapter<T>(config: AxiosRequestConfig): Promise<T> {
   }
 
   // ===== 元数据：数据库类型 / 版本 =====
-  if (url === '/v1/database-types') {
+  if (url === '/v1/database-types/options') {
     return delay([
       {
         id: 1,

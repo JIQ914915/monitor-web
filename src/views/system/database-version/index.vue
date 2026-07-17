@@ -79,9 +79,9 @@
     >
       <template #default>
         <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
-        <el-form-item label="数据库类型" prop="dbType">
-          <el-select v-model="form.dbType" placeholder="选择数据库类型" style="width: 100%" :disabled="!!form.id">
-            <el-option v-for="t in typeOptions" :key="t.code" :value="t.code.toLowerCase()" :label="t.label" />
+        <el-form-item label="数据库类型" prop="dbTypeId">
+          <el-select v-model="form.dbTypeId" placeholder="选择数据库类型" style="width: 100%" :disabled="!!form.id">
+            <el-option v-for="t in typeOptions" :key="t.code" :value="t.id ?? 0" :label="t.label" />
           </el-select>
         </el-form-item>
         <el-form-item label="版本编码" prop="versionCode">
@@ -185,9 +185,8 @@ const versionColumns: TableColumn[] = [
 const typeOptions = ref<DatabaseTypeMgmt[]>([])
 const selectedDbType = ref<string>('')
 
-const selectedLabel = computed(
-  () => typeOptions.value.find((t) => t.code === selectedDbType.value)?.label ?? selectedDbType.value
-)
+const selectedType = computed(() => typeOptions.value.find((type) => type.code === selectedDbType.value))
+const selectedLabel = computed(() => selectedType.value?.label ?? selectedDbType.value)
 
 async function loadTypes() {
   const prevSelected = selectedDbType.value
@@ -219,7 +218,7 @@ async function loadVersions() {
   if (!selectedDbType.value) return
   listLoading.value = true
   try {
-    versions.value = await listDbVersions(selectedDbType.value.toLowerCase())
+    versions.value = await listDbVersions(selectedType.value?.id)
   } finally {
     listLoading.value = false
   }
@@ -234,7 +233,7 @@ const form = reactive<DatabaseVersionMgmt>(emptyForm())
 function emptyForm(): DatabaseVersionMgmt {
   return {
     id: undefined,
-    dbType: selectedDbType.value?.toLowerCase() ?? '',
+    dbTypeId: selectedType.value?.id ?? 0,
     versionCode: '',
     versionName: '',
     sortOrder: 0,
@@ -243,13 +242,13 @@ function emptyForm(): DatabaseVersionMgmt {
 }
 
 const rules: FormRules = {
-  dbType: [{ required: true, message: '请选择数据库类型', trigger: 'change' }],
+  dbTypeId: [{ required: true, message: '请选择数据库类型', trigger: 'change' }],
   versionCode: [{ required: true, message: '请输入版本编码', trigger: 'blur' }]
 }
 
 function openCreate() {
   Object.assign(form, emptyForm())
-  form.dbType = selectedDbType.value?.toLowerCase() ?? ''
+  form.dbTypeId = selectedType.value?.id ?? 0
   drawerVisible.value = true
 }
 

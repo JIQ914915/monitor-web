@@ -450,7 +450,7 @@ async function loadMetricOptions() {
     metricOptions.value = []
     return
   }
-  const all = await listMetricDefinitions(type.code.toLowerCase())
+  const all = await listMetricDefinitions(type.id)
   metricOptions.value = all.filter((m) => m.valueType === 'numeric' && m.enabled !== false)
 }
 

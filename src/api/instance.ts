@@ -53,11 +53,11 @@ export function toggleInstance(id: number, status: 'normal' | 'paused') {
 export interface ConnectionTest {
   /** 已有实例连接测试只传 instanceId，数据库类型由服务端解析。 */
   instanceId?: number
-  /** 仅新增实例连接测试需要传数据库类型。 */
-  dbType?: string
+  /** 仅新增实例连接测试需要传数据库类型ID。 */
+  dbTypeId?: number
   host: string
   port: number
-  /** 监控库名（PostgreSQL 建连必须指定库，缺省 postgres） */
+  /** 监控库名，用于替换数据库类型 JDBC URL 模板中的 database 占位符。 */
   databaseName?: string
   connUser?: string
   connPassword?: string

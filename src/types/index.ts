@@ -301,8 +301,10 @@ export interface DatabaseTypeMgmt {
 /** 数据库版本（管理视图） */
 export interface DatabaseVersionMgmt {
   id?: number
-  /** 数据库类型，如 mysql */
-  dbType: string
+  /** 数据库类型ID */
+  dbTypeId: number
+  /** 数据库类型稳定编码（只读） */
+  dbType?: string
   /** 版本编码，如 8.0 */
   versionCode: string
   versionName?: string
