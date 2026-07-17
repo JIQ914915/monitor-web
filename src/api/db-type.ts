@@ -5,13 +5,13 @@ import type { DatabaseTypeMgmt, DatabaseVersionMgmt, DbTypeOption } from '@/type
 
 /** 启用的数据库类型选项（含默认端口与版本列表），供实例表单下拉动态获取。 */
 export function listDbTypes() {
-  return request<DbTypeOption[]>({ url: '/v1/database-types', method: 'get' })
+  return request<DbTypeOption[]>({ url: '/v1/database-types/options', method: 'post', data: {} })
 }
 
 // ===== 数据库类型管理 CRUD =====
 
 export function listDbTypesAdmin() {
-  return request<DatabaseTypeMgmt[]>({ url: '/v1/database-types/admin', method: 'get' })
+  return request<DatabaseTypeMgmt[]>({ url: '/v1/database-types/admin/list', method: 'post', data: {} })
 }
 
 export function createDbType(data: DatabaseTypeMgmt) {
@@ -30,9 +30,9 @@ export function deleteDbType(id: number) {
 
 export function listDbVersions(dbType?: string) {
   return request<DatabaseVersionMgmt[]>({
-    url: '/v1/database-versions',
-    method: 'get',
-    params: dbType ? { dbType } : {}
+    url: '/v1/database-versions/list',
+    method: 'post',
+    data: dbType ? { dbType } : {}
   })
 }
 

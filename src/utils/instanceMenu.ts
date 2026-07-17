@@ -7,13 +7,15 @@ import type { DbInstance } from '@/types'
  */
 const MENU_GROUP_DB_TYPE: Record<string, string> = {
   monitor_mysql: 'MySQL',
-  monitor_pg: 'PostgreSQL'
+  monitor_pg: 'PostgreSQL',
+  monitor_sqlserver: 'SQL Server'
 }
 
 /** 数据库类型 → 实例级页面的路由前缀（与 sys_menu 中 monitor_<type> 分组的 route 一致） */
 const TYPE_PATH_PREFIX: Record<string, string> = {
   MySQL: '/monitor/mysql',
-  PostgreSQL: '/monitor/pg'
+  PostgreSQL: '/monitor/pg',
+  'SQL Server': '/monitor/sqlserver'
 }
 
 /** 数据库类型对应的实例页面前缀；未知类型返回 null，禁止静默落入 MySQL。 */
