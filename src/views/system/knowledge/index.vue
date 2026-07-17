@@ -157,9 +157,10 @@ const CATEGORIES = [
   { id: 'practice', name: '最佳实践' },
   { id: 'mysql', name: 'MySQL' },
   { id: 'postgresql', name: 'PostgreSQL' },
+  { id: 'sqlserver', name: 'SQL Server' },
   { id: 'backup', name: '备份恢复' }
 ]
-const COMMON_TAGS = ['MySQL', 'PostgreSQL', 'Oracle', '性能优化', '故障诊断', '索引', '复制', '备份恢复', '高可用', '运维']
+const COMMON_TAGS = ['MySQL', 'PostgreSQL', 'SQL Server', 'Oracle', '性能优化', '故障诊断', '索引', '复制', '备份恢复', '高可用', '运维']
 
 function categoryName(id?: string) {
   return CATEGORIES.find((c) => c.id === id)?.name || id || '-'

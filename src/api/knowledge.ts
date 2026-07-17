@@ -11,7 +11,7 @@ export function pageArticles(data: KnowledgeQuery) {
 }
 
 export function listArticles() {
-  return request<KnowledgeArticle[]>({ url: '/v1/knowledge/list', method: 'get' })
+  return request<KnowledgeArticle[]>({ url: '/v1/knowledge/list', method: 'post', data: {} })
 }
 
 export function getArticle(id: number) {
