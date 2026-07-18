@@ -73,7 +73,7 @@
             <span class="section-title"><el-icon><Connection /></el-icon> 阻塞链现场</span>
             <span class="chain-meta">
               抓取时间：{{ blockingChain.capturedAt || '-' }}
-              <el-tag v-if="blockingChain.dbVersion" size="small" type="info" effect="plain">MySQL {{ blockingChain.dbVersion }}</el-tag>
+              <el-tag v-if="blockingChain.dbVersion" size="small" type="info" effect="plain">{{ blockingDbTypeLabel }} {{ blockingChain.dbVersion }}</el-tag>
             </span>
           </div>
         </template>
@@ -99,35 +99,34 @@
             class="chain-alert"
             title="以下为告警建单时刻抓取的锁等待现场（一次性快照，非实时）。如需终止阻塞源会话，请由 DBA 人工确认后执行 KILL，系统不会自动执行"
           />
-          <el-table :data="blockingChainRows" border size="small">
-            <el-table-column label="已等待" width="90" align="center">
-              <template #default="{ row }">
-                <span class="text-danger">{{ row.waitAgeSecs ?? '-' }}s</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="被锁对象" width="180">
-              <template #default="{ row }">
-                <span class="mono">{{ row.lockedTable || '-' }}</span>
-                <el-tag v-if="row.lockedType" size="small" type="warning" effect="plain" class="chain-type-tag">{{ row.lockedType }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="被阻塞会话" min-width="220">
-              <template #default="{ row }">
-                <div class="chain-session">
-                  <el-tag size="small" type="danger" effect="plain">会话 {{ row.waitingPid ?? '-' }}</el-tag>
-                  <div class="chain-sql mono" :title="row.waitingQuery || ''">{{ row.waitingQuery || '（无正在执行的 SQL）' }}</div>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="阻塞源会话" min-width="220">
-              <template #default="{ row }">
-                <div class="chain-session">
-                  <el-tag size="small" type="warning" effect="dark">会话 {{ row.blockingPid ?? '-' }}</el-tag>
-                  <div class="chain-sql mono" :title="row.blockingQuery || ''">{{ row.blockingQuery || '（空闲中，可能是未提交事务）' }}</div>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
+          <ProTable
+            embedded
+            :data="blockingChainRows"
+            :columns="blockingColumns"
+            :show-toolbar="false"
+            :show-operation="false"
+            :show-pagination="false"
+          >
+            <template #col-wait="{ row }"><span class="text-danger">{{ row.waitAgeSecs ?? '-' }}s</span></template>
+            <template #col-object="{ row }">
+              <span class="mono">{{ row.lockedTable || '-' }}</span>
+              <el-tag v-if="row.lockedType" size="small" type="warning" effect="plain" class="chain-type-tag">{{ row.lockedType }}</el-tag>
+            </template>
+            <template #col-depth="{ row }">{{ row.chainDepth }}</template>
+            <template #col-root="{ row }"><span class="mono">{{ row.rootBlockingPid ?? '-' }}</span></template>
+            <template #col-waiting="{ row }">
+              <div class="chain-session">
+                <el-tag size="small" type="danger" effect="plain">会话 {{ row.waitingPid ?? '-' }}</el-tag>
+                <div class="chain-sql mono" :title="row.waitingQuery || ''">{{ row.waitingQuery || '（无正在执行的 SQL）' }}</div>
+              </div>
+            </template>
+            <template #col-blocking="{ row }">
+              <div class="chain-session">
+                <el-tag size="small" type="warning" effect="dark">会话 {{ row.blockingPid ?? '-' }}</el-tag>
+                <div class="chain-sql mono" :title="row.blockingQuery || ''">{{ row.blockingQuery || '（空闲中，可能是未提交事务）' }}</div>
+              </div>
+            </template>
+          </ProTable>
         </template>
       </el-card>
 
@@ -387,12 +386,14 @@ import { getMetricTrend } from '@/api/metric'
 import { getInstance } from '@/api/instance'
 import { toDrilldownProfile, type DrilldownMetric, type DrilldownStep } from '@/config/alertDrilldown'
 import DictTag from '@/components/DictTag.vue'
+import ProTable from '@/components/ProTable/index.vue'
+import type { TableColumn } from '@/components/ProTable/types'
 import SqlBlock from '@/components/SqlBlock.vue'
 import { fmtDurationCn as fmtDuration } from '@/utils/format'
 import { useDict } from '@/composables/useDict'
 import { useInstanceStore } from '@/stores/instance'
 import { getAlertPath, getDrilldownPath, isInstanceScopedPath } from '@/utils/instanceMenu'
-import type { AlertEventOperateLogVo, TrendPoint } from '@/types/monitor'
+import type { AlertEventOperateLogVo, BlockingChainRow, TrendPoint } from '@/types/monitor'
 import { M } from '@/constants/metrics'
 import DrilldownChart from './components/DrilldownChart.vue'
 
@@ -438,7 +439,42 @@ const isScenario = computed(() => ev.value?.eventSource === 'scenario')
 
 // ── 阻塞链现场（锁相关事件建单时抓取的一次性快照）────────────────────────
 const blockingChain = computed(() => ev.value?.blockingChainSnapshot ?? null)
-const blockingChainRows = computed(() => blockingChain.value?.rows ?? [])
+type BlockingDisplayRow = BlockingChainRow & { chainDepth: number; rootBlockingPid: number | null }
+const blockingChainRows = computed<BlockingDisplayRow[]>(() => {
+  const rows = blockingChain.value?.rows ?? []
+  const blockers = new Map<number, number>()
+  for (const row of rows) {
+    if (row.waitingPid != null && row.blockingPid != null) blockers.set(row.waitingPid, row.blockingPid)
+  }
+  return rows.map(row => {
+    let depth = 0
+    let root = row.blockingPid ?? null
+    let current = row.waitingPid ?? null
+    const visited = new Set<number>()
+    while (current != null && blockers.has(current) && !visited.has(current)) {
+      visited.add(current)
+      root = blockers.get(current) ?? root
+      current = root
+      depth++
+    }
+    return { ...row, chainDepth: depth, rootBlockingPid: root }
+  })
+})
+const blockingDbTypeLabel = computed(() => {
+  const type = (ctx.value?.profile?.dbType ?? instanceStore.current?.dbType ?? '').toLowerCase().replace(/[\s_-]/g, '')
+  if (type === 'sqlserver') return 'SQL Server'
+  if (type === 'postgresql') return 'PostgreSQL'
+  if (type === 'mysql') return 'MySQL'
+  return '数据库'
+})
+const blockingColumns: TableColumn[] = [
+  { prop: 'waitAgeSecs', label: '已等待', width: 90, align: 'center', slot: 'col-wait' },
+  { prop: 'lockedTable', label: '被锁对象', minWidth: 160, slot: 'col-object' },
+  { prop: 'chainDepth', label: '链深', width: 72, align: 'center', slot: 'col-depth' },
+  { prop: 'rootBlockingPid', label: '根阻塞者', width: 100, align: 'center', slot: 'col-root' },
+  { prop: 'waitingPid', label: '被阻塞会话', minWidth: 220, slot: 'col-waiting' },
+  { prop: 'blockingPid', label: '直接阻塞会话', minWidth: 220, slot: 'col-blocking' }
+]
 const signals = computed(() => ev.value?.signalsSnapshot ?? [])
 const totalSignalCount = computed(() => signals.value.length)
 const metSignalCount = computed(() => signals.value.filter(s => s.met).length)

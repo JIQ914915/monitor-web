@@ -80,7 +80,7 @@ const RANGES = [
 const CUSTOM_1M_MAX_SPAN_MS = 6 * 3600_000
 
 // ── 分类图表定义（SQL Server 口径） ──────────────────────────────────────────────
-interface MetricDef { code: string; label: string; unit: string; color: string; toGB?: boolean }
+interface MetricDef { code: string; label: string; unit: string; color: string; toGB?: boolean; sourceFrequency?: '1h' }
 interface CategoryDef { id: string; label: string; tip?: string; metrics: MetricDef[] }
 
 const CATEGORIES: CategoryDef[] = [
@@ -156,12 +156,15 @@ const CATEGORIES: CategoryDef[] = [
     ]
   },
   {
-    id: 'concurrency', label: '阻塞、死锁与事务',
-    tip: '阻塞会话持续大于 0 需要下钻阻塞链；死锁表示业务事务已被回滚；打开事务数升高时应检查未提交事务。',
+    id: 'concurrency', label: '事务与阻塞链',
+    tip: '最长事务和 sleeping 未提交事务用于发现事务边界异常；阻塞时长、链深和根阻塞者数量用于判断影响范围。平台不会自动终止会话。',
     metrics: [
+      { code: SQLSERVER.TRANSACTION_MAX_SECONDS, label: '最长事务', unit: 's', color: '#E08600' },
+      { code: SQLSERVER.SLEEPING_OPEN_MAX_SECONDS, label: '最长睡眠未提交事务', unit: 's', color: '#B91C1C' },
       { code: SQLSERVER.BLOCKED_SESSIONS, label: '被阻塞会话', unit: '', color: '#9B59B6' },
-      { code: SQLSERVER.DEADLOCKS, label: '死锁速率', unit: 'qps', color: '#E5484D' },
-      { code: SQLSERVER.MAX_OPEN_TRANSACTIONS, label: '最大打开事务', unit: '', color: '#E08600' }
+      { code: SQLSERVER.BLOCKING_MAX_WAIT_SECONDS, label: '最长阻塞', unit: 's', color: '#E5484D' },
+      { code: SQLSERVER.BLOCKING_MAX_CHAIN_DEPTH, label: '最大阻塞链深', unit: '', color: '#6366F1' },
+      { code: SQLSERVER.DEADLOCKS, label: '死锁速率', unit: 'qps', color: '#6B7280' }
     ]
   },
   {
@@ -176,12 +179,59 @@ const CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'storage', label: '数据与事务日志',
-    tip: '展示当前连接数据库的数据文件、日志文件和日志使用率趋势；日志使用率升高时需检查日志备份、复用等待和长事务。',
+    tip: '展示用户数据库的数据、日志容量和使用率趋势；日志使用率升高时需检查日志备份、复用等待和长事务。',
     metrics: [
       { code: SQLSERVER.DATA_SIZE_BYTES, label: '数据文件容量', unit: 'GB', color: '#6366F1', toGB: true },
       { code: SQLSERVER.DATA_USED_BYTES, label: '数据已用容量', unit: 'GB', color: '#0C7C97', toGB: true },
       { code: SQLSERVER.LOG_SIZE_BYTES, label: '日志容量', unit: 'GB', color: '#E08600', toGB: true },
       { code: SQLSERVER.LOG_USED_PERCENT, label: '日志使用率', unit: '%', color: '#E5484D' }
+    ]
+  },
+  {
+    id: 'log-health', label: '日志刷新与 VLF',
+    tip: '日志刷新延迟用于观察事务提交等待；VLF 数量过多会影响日志恢复和管理，调整前需由 DBA 评估增长策略。',
+    metrics: [
+      { code: SQLSERVER.LOG_BYTES_FLUSHED_PER_SEC, label: '日志刷新字节/秒', unit: 'B/s', color: '#0C7C97' },
+      { code: SQLSERVER.LOG_FLUSHES_PER_SEC, label: '日志刷新次数/秒', unit: '', color: '#15A36A' },
+      { code: SQLSERVER.LOG_FLUSH_LATENCY_MS, label: '平均刷新延迟', unit: 'ms', color: '#E5484D' },
+      { code: SQLSERVER.LOG_VLF_MAX_COUNT, label: '单库最大 VLF', unit: '', color: '#E08600', sourceFrequency: '1h' }
+    ]
+  },
+  {
+    id: 'tempdb-contention', label: 'TempDB 布局与争用',
+    tip: '文件数量、大小偏差和百分比增长反映布局风险；持续 PAGELATCH 等待需结合并发负载人工评估。',
+    metrics: [
+      { code: SQLSERVER.TEMPDB_DATA_FILE_COUNT, label: '数据文件数', unit: '', color: '#0C7C97' },
+      { code: SQLSERVER.TEMPDB_SIZE_SKEW_PERCENT, label: '文件大小偏差', unit: '%', color: '#E08600' },
+      { code: SQLSERVER.TEMPDB_PERCENT_GROWTH_COUNT, label: '百分比增长文件数', unit: '', color: '#6366F1' },
+      { code: SQLSERVER.TEMPDB_PAGELATCH_TASKS, label: 'PAGELATCH 等待任务', unit: '', color: '#E5484D' },
+      { code: SQLSERVER.TEMPDB_PAGELATCH_MAX_WAIT_MS, label: 'PAGELATCH 最大等待', unit: 'ms', color: '#B91C1C' }
+    ]
+  },
+  {
+    id: 'capacity-risk', label: '文件增长与卷空间',
+    tip: '百分比自动增长文件数和文件卷最小剩余比例用于识别容量风险，具体文件配置在实时诊断明细查看。',
+    metrics: [
+      { code: SQLSERVER.FILE_PERCENT_GROWTH_COUNT, label: '百分比增长文件数', unit: '', color: '#E08600', sourceFrequency: '1h' },
+      { code: SQLSERVER.VOLUME_MIN_FREE_PERCENT, label: '文件卷最小剩余比例', unit: '%', color: '#E5484D', sourceFrequency: '1h' }
+    ]
+  },
+  {
+    id: 'query-store', label: 'Query Store 性能回退',
+    tip: '检测最近一小时计划变化及相对历史基线的性能回退；平台只提供证据，不自动强制计划。',
+    metrics: [
+      { code: SQLSERVER.QUERY_STORE_CHANGED_COUNT, label: '计划变化查询数', unit: '', color: '#E08600', sourceFrequency: '1h' },
+      { code: SQLSERVER.QUERY_STORE_MAX_REGRESSION, label: '最大回退倍数', unit: 'x', color: '#E5484D', sourceFrequency: '1h' }
+    ]
+  },
+  {
+    id: 'operations', label: '作业、复制与 CDC',
+    tip: '汇总 Agent 连续失败、最长运行作业、复制投递延迟和 CDC 扫描延迟，明细需结合目标功能是否启用判断。',
+    metrics: [
+      { code: SQLSERVER.AGENT_FAILURE_JOBS, label: '连续失败作业数', unit: '', color: '#E5484D', sourceFrequency: '1h' },
+      { code: SQLSERVER.AGENT_MAX_RUNNING_SECONDS, label: '最长运行作业', unit: 's', color: '#E08600', sourceFrequency: '1h' },
+      { code: SQLSERVER.REPLICATION_MAX_LATENCY_MS, label: '复制最大投递延迟', unit: 'ms', color: '#6366F1', sourceFrequency: '1h' },
+      { code: SQLSERVER.CDC_MAX_LATENCY_SECONDS, label: 'CDC 最大扫描延迟', unit: 's', color: '#9B59B6', sourceFrequency: '1h' }
     ]
   }
 ]
@@ -322,13 +372,15 @@ async function loadAll(silent = false) {
   }
   try {
     const { from, to, freq } = effectiveQuery.value
-    const results = [await getPerfTrendBatch({
-      instanceId: inst.value.id,
-      metricCodes: ALL_CODES,
-      from,
-      to,
-      frequency: freq
-    })]
+    const hourlyCodes = CATEGORIES.flatMap(c => c.metrics.filter(m => m.sourceFrequency === '1h').map(m => m.code))
+    const minuteCodes = ALL_CODES.filter(code => !hourlyCodes.includes(code))
+    const requests = freq === '1h'
+      ? [getPerfTrendBatch({ instanceId: inst.value.id, metricCodes: ALL_CODES, from, to, frequency: '1h' })]
+      : [
+          getPerfTrendBatch({ instanceId: inst.value.id, metricCodes: minuteCodes, from, to, frequency: '1m' }),
+          getPerfTrendBatch({ instanceId: inst.value.id, metricCodes: hourlyCodes, from, to, frequency: '1h' })
+        ]
+    const results = await Promise.all(requests)
 
     const gbCodes = new Set(CATEGORIES.flatMap(c => c.metrics.filter(m => m.toGB).map(m => m.code)))
     for (const code of ALL_CODES) pointsByCode[code] = []

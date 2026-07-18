@@ -26,6 +26,8 @@
         <StatCard label="事务日志使用率" :value="display(SQL.LOG_USED)" tone="primary" unit="%" sub="展示所有用户库中的最大值" />
       </div>
 
+      <SqlServerDiagnosticsPanel :instance-id="inst.id" />
+
       <el-card shadow="never">
         <template #header><span class="section-title">监控能力状态</span></template>
         <ProTable
@@ -65,6 +67,7 @@ import type { TableColumn } from '@/components/ProTable/types'
 import StatCard from '@/components/StatCard.vue'
 import { useInstanceStore } from '@/stores/instance'
 import type { AlertEventVo } from '@/types/monitor'
+import SqlServerDiagnosticsPanel from './components/SqlServerDiagnosticsPanel.vue'
 
 const SQL = {
   AVAILABILITY: 'sqlserver.availability',

@@ -82,21 +82,34 @@ const TYPE_STEP_LINKS: Record<string, Record<string, string>> = {
     performance: '/monitor/pg/performance',
     scenario: '/monitor/pg/scenario',
     replication: '/monitor/pg/replication'
+  },
+  sqlserver: {
+    slowsql: '/monitor/sqlserver/slowsql',
+    realtime: '/monitor/sqlserver/realtime',
+    performance: '/monitor/sqlserver/performance',
+    scenario: '/monitor/sqlserver/scenario'
   }
 }
 
 /** link 兼容页面编码与绝对路由两种写法；通用编码必须结合画像数据库类型解析。 */
+function normalizeDbType(dbType?: string | null): string {
+  return (dbType ?? '').toLowerCase().replace(/[\s_-]/g, '')
+}
+
 function resolveStepLink(link: unknown, dbType?: string | null): string | undefined {
   if (typeof link !== 'string' || !link) return undefined
+  const normalizedType = normalizeDbType(dbType)
   if (link.startsWith('/')) {
     const routeType = link === '/monitor/mysql' || link.startsWith('/monitor/mysql/')
       ? 'mysql'
       : link === '/monitor/pg' || link.startsWith('/monitor/pg/')
         ? 'postgresql'
-        : null
-    return routeType == null || dbType?.toLowerCase() === routeType ? link : undefined
+        : link === '/monitor/sqlserver' || link.startsWith('/monitor/sqlserver/')
+          ? 'sqlserver'
+          : null
+    return routeType == null || normalizedType === routeType ? link : undefined
   }
-  return STEP_LINKS[link] ?? (dbType ? TYPE_STEP_LINKS[dbType.toLowerCase()]?.[link] : undefined)
+  return STEP_LINKS[link] ?? TYPE_STEP_LINKS[normalizedType]?.[link]
 }
 
 const CAUSE_COLORS = new Set(['danger', 'warning', 'info'])

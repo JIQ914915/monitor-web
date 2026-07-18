@@ -166,6 +166,7 @@
             <el-radio value="group">按分组</el-radio>
             <el-radio value="owner">按负责人</el-radio>
           </el-radio-group>
+          <div v-if="genForm.reportType === 'capacity'" class="form-hint">容量专项报告仅支持 MySQL 或 SQL Server，且一次报告只能包含同一种数据库类型</div>
         </el-form-item>
         <el-form-item v-if="genForm.scopeType === 'instance'" label="选择实例" prop="instanceIds">
           <el-select v-model="genForm.instanceIds" multiple filterable collapse-tags :max-collapse-tags="3" placeholder="请选择实例" style="width: 100%">
@@ -173,6 +174,7 @@
           </el-select>
           <div v-if="genForm.reportType === 'performance'" class="form-hint">性能分析报告仅支持单个实例，多选时取第一个</div>
           <div v-if="genForm.reportType === 'security'" class="form-hint">安全专项报告当前仅支持 MySQL；按分组或负责人生成时也不能包含 PG 实例</div>
+          <div v-if="genForm.reportType === 'capacity'" class="form-hint">选择首个实例后，只显示相同数据库类型的可选实例</div>
         </el-form-item>
         <el-form-item v-if="genForm.scopeType === 'group'" label="选择分组" prop="groupIds">
           <el-select v-model="genForm.groupIds" multiple placeholder="请选择分组" style="width: 100%">
@@ -233,7 +235,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -376,11 +378,33 @@ const genVisible = ref(false)
 const genFormRef = ref<FormInstance>()
 const genDrawerRef = ref<{ stopSaving: (close?: boolean) => void } | null>(null)
 const instanceOptions = ref<DbInstance[]>([])
-const selectableInstanceOptions = computed(() =>
-  genForm.reportType === 'security'
-    ? instanceOptions.value.filter(ins => ins.dbType === 'MySQL')
-    : instanceOptions.value
-)
+type CapacityDbFamily = 'mysql' | 'sqlserver'
+function capacityDbFamily(dbType?: string | null): CapacityDbFamily | null {
+  const normalized = (dbType ?? '').replace(/[\s_-]/g, '').toUpperCase()
+  if (normalized === 'MYSQL') return 'mysql'
+  if (normalized === 'SQLSERVER') return 'sqlserver'
+  return null
+}
+const selectedCapacityFamily = computed<CapacityDbFamily | null>(() => {
+  if (genForm.reportType !== 'capacity') return null
+  for (const id of genForm.instanceIds) {
+    const family = capacityDbFamily(instanceOptions.value.find(ins => ins.id === id)?.dbType)
+    if (family) return family
+  }
+  return null
+})
+const selectableInstanceOptions = computed(() => {
+  if (genForm.reportType === 'security') {
+    return instanceOptions.value.filter(ins => capacityDbFamily(ins.dbType) === 'mysql')
+  }
+  if (genForm.reportType === 'capacity') {
+    return instanceOptions.value.filter(ins => {
+      const family = capacityDbFamily(ins.dbType)
+      return family != null && (selectedCapacityFamily.value == null || family === selectedCapacityFamily.value)
+    })
+  }
+  return instanceOptions.value
+})
 const groupOptions = ref<GroupOption[]>([])
 const ownerOptions = ref<UserOption[]>([])
 
@@ -413,6 +437,19 @@ const genRules: FormRules = {
       if (hasUnsupported) {
         cb(new Error('安全专项报告当前仅支持 MySQL 实例'))
         return
+      }
+      if (genForm.reportType === 'capacity') {
+        const families = new Set(genForm.instanceIds.map(id =>
+          capacityDbFamily(instanceOptions.value.find(ins => ins.id === id)?.dbType)
+        ))
+        if (families.has(null)) {
+          cb(new Error('容量专项报告仅支持 MySQL 或 SQL Server 实例'))
+          return
+        }
+        if (families.size > 1) {
+          cb(new Error('容量专项报告一次只能选择同一种数据库类型'))
+          return
+        }
       }
       cb()
     },
@@ -493,6 +530,23 @@ function dictLabel(dict: string, value?: string | null): string {
   const item = getDictItems(dict).find(i => i.itemValue === value)
   return (item?.itemLabel as string) ?? value
 }
+
+watch(() => genForm.reportType, reportType => {
+  if (reportType === 'security') {
+    genForm.instanceIds = genForm.instanceIds.filter(id =>
+      capacityDbFamily(instanceOptions.value.find(ins => ins.id === id)?.dbType) === 'mysql'
+    )
+  }
+  if (reportType === 'capacity') {
+    const firstFamily = genForm.instanceIds
+      .map(id => capacityDbFamily(instanceOptions.value.find(ins => ins.id === id)?.dbType))
+      .find((family): family is CapacityDbFamily => family != null)
+    genForm.instanceIds = genForm.instanceIds.filter(id => {
+      const family = capacityDbFamily(instanceOptions.value.find(ins => ins.id === id)?.dbType)
+      return family != null && (firstFamily == null || family === firstFamily)
+    })
+  }
+})
 
 onMounted(() => {
   loadArchive()

@@ -14,6 +14,15 @@
         :description="unsupportedHint.description"
       />
 
+      <el-alert
+        v-if="sqlServerSourceNotice"
+        :type="sqlServerSourceNotice.type"
+        show-icon
+        :closable="false"
+        :title="sqlServerSourceNotice.title"
+        :description="sqlServerSourceNotice.description"
+      />
+
       <!-- 页头：窗口说明 + 刷新 -->
       <div class="page-toolbar">
         <div class="toolbar-left">
@@ -115,7 +124,7 @@
           </el-tab-pane>
 
           <!-- ② 慢SQL样本 -->
-          <el-tab-pane label="慢SQL样本" name="list">
+          <el-tab-pane v-if="dbKind !== 'sqlserver'" label="慢SQL样本" name="list">
             <div class="filter-row pane-filter">
               <div class="filter-item">
                 <span class="filter-label">SQL类型</span>
@@ -301,6 +310,7 @@ import { useInstanceStore } from '@/stores/instance'
 import InstanceEmpty from '@/components/InstanceEmpty.vue'
 import DictTag from '@/components/DictTag.vue'
 import { fmtCount, fmtMs, fmtMdHm as fmtTime } from '@/utils/format'
+import { getMetricTextLatest } from '@/api/metric'
 import {
   pageSlowSqlDigest, pageSlowSqlSamples, getSlowSqlDigestDetail, getSlowSqlStats, listSlowSqlAlerts,
   getSlowSqlWindowCompare, getSlowSqlClusters
@@ -325,9 +335,10 @@ const instanceStore = useInstanceStore()
 const inst = computed(() => instanceStore.current)
 
 /** 数据库类型文案必须显式分派，未知类型不得落入 MySQL。 */
-const dbKind = computed<'mysql' | 'postgresql' | 'unknown'>(() => {
+const dbKind = computed<'mysql' | 'postgresql' | 'sqlserver' | 'unknown'>(() => {
   if (inst.value?.dbType === 'MySQL') return 'mysql'
   if (inst.value?.dbType === 'PostgreSQL') return 'postgresql'
+  if (inst.value?.dbType === 'SQL Server' || inst.value?.dbType === 'SQLServer') return 'sqlserver'
   return 'unknown'
 })
 
@@ -335,6 +346,7 @@ const dbKind = computed<'mysql' | 'postgresql' | 'unknown'>(() => {
 const windowTooltip = computed(() => {
   if (dbKind.value === 'postgresql') return '基于 pg_stat_statements 语句统计的小时级增量'
   if (dbKind.value === 'mysql') return '基于 performance_schema 语句摘要的小时级增量统计'
+  if (dbKind.value === 'sqlserver') return '优先使用 Query Store；未启用或版本不支持时降级为实例 DMV 累计快照'
   return '当前实例数据库类型未识别，无法确定 Top SQL 数据来源'
 })
 
@@ -357,6 +369,12 @@ const unsupportedHint = computed(() => {
         + 'SET GLOBAL log_output=\'TABLE\';），系统将自动从 mysql.slow_log 增量采集慢查询样本'
     }
   }
+  if (dbKind.value === 'sqlserver') {
+    return {
+      title: 'SQL Server Top SQL 暂无可用数据',
+      description: '请检查 Query Store/DMV 采集状态和监控账号只读状态权限。'
+    }
+  }
   return {
     title: '当前实例数据库类型未识别，暂无法提供 Top SQL 指纹分析',
     description: '请检查实例的数据库类型配置，系统不会按 MySQL 规则进行降级处理'
@@ -371,6 +389,7 @@ const sampleEmptyText = computed(() => {
   if (dbKind.value === 'mysql') {
     return '统计窗口内暂无慢SQL执行样本（样本自采集功能启用后开始积累，需实例产生超过 long_query_time 的语句）'
   }
+  if (dbKind.value === 'sqlserver') return 'SQL Server 当前提供 Query Store/DMV 聚合 Top SQL，不采集逐次执行样本'
   return '当前实例数据库类型未识别，无法确定慢SQL样本来源'
 })
 
@@ -385,7 +404,8 @@ const filters = reactive<{
 }>({ sqlType: '', minAvgMs: undefined, maxAvgMs: undefined })
 
 // ── 表格列定义（ProTable）─────────────────────────────────────────────────
-const fpColumns: TableColumn[] = [
+const fpColumns = computed<TableColumn[]>(() => {
+  const columns: TableColumn[] = [
   { prop: 'digestText', label: 'SQL模式', minWidth: 280, slot: 'col-digest-text' },
   { prop: 'schemaName', label: '所属库', width: 104, formatter: r => r.schemaName || '-' },
   { prop: 'execCount', label: '出现次数', width: 105, align: 'right', sortable: 'custom', formatter: r => fmtCount(r.execCount) },
@@ -395,7 +415,9 @@ const fpColumns: TableColumn[] = [
   { prop: 'tmpTables', label: '临时表', width: 72, align: 'center', slot: 'col-tmp-tables' },
   { prop: 'optimizeStatus', label: '优化状态', width: 90, align: 'center', slot: 'col-optimize-status' },
   { prop: 'alertCount', label: '关联告警', width: 90, align: 'center', slot: 'col-alerts' }
-]
+  ]
+  return columns.filter(column => dbKind.value !== 'sqlserver' || !['noIndexUsed', 'tmpTables'].includes(column.prop ?? ''))
+})
 
 const listColumns: TableColumn[] = [
   { prop: 'sqlType', label: 'SQL类型', width: 88, align: 'center', slot: 'col-sql-type' },
@@ -432,6 +454,22 @@ const listPageSize = ref(20)
 
 const statsLoading = ref(false)
 const stats = ref<SlowSqlStatsVo | null>(null)
+const sqlServerCollectState = ref<string | null>(null)
+
+const sqlServerSourceNotice = computed<{ title: string; description: string; type: 'info' | 'warning' | 'error' } | null>(() => {
+  if (dbKind.value !== 'sqlserver' || !sqlServerCollectState.value || sqlServerCollectState.value === 'available') return null
+  const state = sqlServerCollectState.value
+  if (state === 'permission_denied' || state === 'collect_error') {
+    return { title: 'SQL Server Top SQL 采集受限', description: 'Query Store 与 DMV 均未能正常读取，请检查监控账号权限和最近采集日志。', type: 'error' }
+  }
+  return {
+    title: 'SQL Server Top SQL 正在使用 DMV 降级数据',
+    description: state === 'version_not_support'
+      ? '当前版本不支持 Query Store，页面展示实例启动以来 DMV 累计快照。'
+      : '目标数据库未启用 Query Store，页面展示实例启动以来 DMV 累计快照。',
+    type: state === 'version_not_support' ? 'info' : 'warning'
+  }
+})
 
 /** 窗口内慢SQL相关告警事件（一次加载，前端按指纹出现期交叠计数） */
 const alerts = ref<SlowSqlAlertVo[]>([])
@@ -560,11 +598,15 @@ function windowRange() {
 // ── 统计卡片（对齐原型：慢SQL总数/平均执行时间/最慢SQL/总执行次数/无索引查询/使用临时表） ──
 const statCards = computed(() => {
   const s = stats.value
+  const common = [
+    { label: 'Top SQL 指纹数', value: s ? fmtCount(s.digestCount) : '-', tone: 'primary', valueTone: 'none', sub: '统计窗口内指纹数' },
+    { label: '平均执行时间', value: s ? fmtMs(s.avgTimeMs) : '-', tone: 'success', valueTone: 'none', sub: '全部 Top SQL 平均' },
+    { label: '最慢 SQL', value: s ? fmtMs(s.maxAvgTimeMs) : '-', tone: 'danger', valueTone: s && s.maxAvgTimeMs >= 5000 ? 'danger' : 'none', sub: '单条指纹峰值' },
+    { label: '总执行次数', value: s ? fmtCount(s.totalExecCount) : '-', tone: 'primary', valueTone: 'none', sub: '窗口内累计执行' }
+  ]
+  if (dbKind.value === 'sqlserver') return common
   return [
-    { label: '慢SQL总数', value: s ? fmtCount(s.digestCount) : '-', tone: 'primary', valueTone: 'none', sub: '统计窗口内指纹数' },
-    { label: '平均执行时间', value: s ? fmtMs(s.avgTimeMs) : '-', tone: 'success', valueTone: 'none', sub: '全部慢SQL平均' },
-    { label: '最慢SQL', value: s ? fmtMs(s.maxAvgTimeMs) : '-', tone: 'danger', valueTone: s && s.maxAvgTimeMs >= 5000 ? 'danger' : 'none', sub: '单条指纹峰值' },
-    { label: '总执行次数', value: s ? fmtCount(s.totalExecCount) : '-', tone: 'primary', valueTone: 'none', sub: '窗口内累计执行' },
+    ...common,
     { label: '无索引查询', value: s ? fmtCount(s.noIndexDigestCount) : '-', tone: 'warning', valueTone: s && s.noIndexDigestCount > 0 ? 'warning' : 'none', sub: '建议补充索引' },
     { label: '使用临时表', value: s ? fmtCount(s.tmpTableDigestCount) : '-', tone: 'warning', valueTone: s && s.tmpTableDigestCount > 0 ? 'warning' : 'none', sub: '关注排序与分组' }
   ]
@@ -794,6 +836,19 @@ async function loadStats() {
   }
 }
 
+async function loadSqlServerSourceState() {
+  if (!inst.value || dbKind.value !== 'sqlserver') {
+    sqlServerCollectState.value = null
+    return
+  }
+  try {
+    const res = await getMetricTextLatest(inst.value.id, ['sqlserver.query_store.collect_state'], '1h')
+    sqlServerCollectState.value = res.values?.['sqlserver.query_store.collect_state'] ?? null
+  } catch {
+    sqlServerCollectState.value = null
+  }
+}
+
 async function loadAlerts() {
   if (!inst.value) return
   const { from, to } = windowRange()
@@ -811,6 +866,7 @@ function reloadAll() {
   loadFpPage()
   loadListPage()
   loadStats()
+  loadSqlServerSourceState()
   loadAlerts()
   loadCompare()
   loadClusters()
