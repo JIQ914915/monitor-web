@@ -86,7 +86,7 @@ export function testInstanceConnection(data: ConnectionTest) {
 export interface InstanceCapability {
   capability: string
   name: string
-  status: 'available' | 'limited' | 'version_not_support' | 'not_applicable' | 'collect_error' | 'no_data' | string
+  status: 'available' | 'limited' | 'permission_denied' | 'version_not_support' | 'edition_not_support' | 'not_enabled' | 'not_applicable' | 'collect_error' | 'no_data' | string
   message?: string | null
 }
 
