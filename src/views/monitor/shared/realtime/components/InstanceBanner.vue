@@ -69,7 +69,7 @@
       <HealthGauge :value="score" :size="64" :stroke="6" :show-label="false" />
       <div class="ib-score-meta">
         <span class="ib-score-lbl">健康评分</span>
-        <el-tag :type="levelTag" size="small" effect="dark">{{ levelLabel }}</el-tag>
+        <DictTag dict="health_level" :value="healthLevel" size="small" effect="dark" />
       </div>
     </div>
   </div>
@@ -77,6 +77,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import DictTag from '@/components/DictTag.vue'
 import HealthGauge from '@/components/HealthGauge.vue'
 import type { DbInstance } from '@/types'
 
@@ -118,19 +119,18 @@ const statusDotClass = computed(() => statusInfo.value.dot)
 const statusTextClass = computed(() => statusInfo.value.text)
 
 // ── 健康等级 ───────────────────────────────────────────────────────────────
-// 优先用实时计算分；inst.health 是实体上的旧字段，fallback 用
-const score = computed(() => props.healthScore ?? props.inst.health ?? 0)
-const levelLabel = computed(() => {
-  if (score.value >= 90) return '优秀'
-  if (score.value >= 75) return '良好'
-  if (score.value >= 60) return '警告'
-  return '严重'
+// 优先用实时计算分；inst.health 是实体上的旧字段，仅在分数有效时回退使用。
+// NaN 由 HealthGauge 统一渲染为暂无数据，避免缺少指标被误判为 0 分严重。
+const score = computed(() => {
+  const value = props.healthScore ?? props.inst.health
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : Number.NaN
 })
-const levelTag = computed((): 'success' | 'primary' | 'warning' | 'danger' => {
-  if (score.value >= 90) return 'success'
-  if (score.value >= 75) return 'primary'
+const healthLevel = computed(() => {
+  if (!Number.isFinite(score.value)) return 'no_data'
+  if (score.value >= 90) return 'excellent'
+  if (score.value >= 75) return 'good'
   if (score.value >= 60) return 'warning'
-  return 'danger'
+  return 'critical'
 })
 
 function handleToggle(val: string | number | boolean) {

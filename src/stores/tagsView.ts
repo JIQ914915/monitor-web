@@ -53,14 +53,9 @@ export const useTagsViewStore = defineStore('tagsView', {
     closeAll() {
       this.visited = this.visited.filter((v) => v.affix)
     },
-    /**
-     * 切换实例后关闭实例级页面标签（/monitor/** 各类型分组页）。
-     * keepPath：切换后停留/跳转的页面，保留其标签避免当前页被误关。
-     */
-    closeInstanceScoped(keepPath?: string) {
-      this.visited = this.visited.filter(
-        (v) => v.affix || v.path === keepPath || !v.path.startsWith('/monitor/')
-      )
+    /** 切换实例后关闭全部实例级页面标签（/monitor/** 各类型分组页）。 */
+    closeInstanceScoped() {
+      this.visited = this.visited.filter((v) => v.affix || !v.path.startsWith('/monitor/'))
     }
   }
 })

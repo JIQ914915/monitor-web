@@ -9,7 +9,7 @@
         :owner-a-name="ownerAName"
         :owner-b-name="ownerBName"
         :group-name="groupName"
-        :health-score="healthData && healthData.score >= 0 ? healthData.score : undefined"
+        :health-score="healthData?.score"
         @open-health="showHealthDialog = true"
         @toggle="handleToggle"
       />
@@ -17,23 +17,16 @@
       <!-- 能力降级提示：一期未覆盖能力（Top SQL / 慢SQL样本等）在此说明 -->
       <CapabilityBanner :instance-id="inst.id" />
 
-      <PgSessionPanel :instance-id="inst.id" />
+      <PgCollectionQualityAlert :instance-id="inst.id" scope="realtime" />
 
-      <!-- 关键状态卡片 -->
-      <div class="stat-row">
-        <div class="stat-card" v-for="s in statCards" :key="s.label">
-          <div class="stat-label">
-            {{ s.label }}
-            <el-tooltip v-if="s.tip" :content="s.tip" placement="top" :show-after="150">
-              <el-icon class="stat-tip"><QuestionFilled /></el-icon>
-            </el-tooltip>
-          </div>
-          <div class="stat-value" :class="s.status">{{ s.value }}</div>
-          <div v-if="s.sub" class="stat-sub">{{ s.sub }}</div>
-        </div>
-      </div>
+      <el-card shadow="never" class="tab-card">
+        <el-tabs v-model="activeTab" class="detail-tabs">
+          <el-tab-pane label="性能监控" name="performance">
+            <div class="stat-row">
+              <StatCard v-for="s in statCards" :key="s.label" :label="s.label" :value="s.value" :sub="s.sub || s.tip" :tone="statTone(s.status)" size="small" />
+            </div>
 
-      <el-card shadow="never" class="chart-card" v-loading="loading">
+            <div class="chart-content" v-loading="loading">
         <div class="chart-section">
           <div class="section-title">连接与事务</div>
           <div class="chart-grid">
@@ -125,6 +118,33 @@
               tip="监控连接所在库与实例内全部业务库的磁盘占用（每小时采集一次，新接入实例需等待 1 小时）" />
           </div>
         </div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="连接与阻塞" name="connections">
+            <PgSessionPanel :instance-id="inst.id" />
+          </el-tab-pane>
+
+          <el-tab-pane label="监控能力" name="capabilities" v-loading="capabilityLoading">
+            <el-alert v-if="capabilityError" type="warning" :closable="false" :title="capabilityError" show-icon />
+            <el-empty v-else-if="capabilityLoaded && !capabilities.length" description="暂无监控能力数据" :image-size="64" />
+            <ProTable v-else :data="capabilities" :columns="capabilityColumns" :show-toolbar="false" :show-operation="false" :show-pagination="false" embedded class="inner-table">
+              <template #col-status="{ row }"><DictTag dict="capability_status" :value="row.status" /></template>
+              <template #col-message="{ row }">{{ row.message || '能力已满足，无需处理' }}</template>
+            </ProTable>
+          </el-tab-pane>
+
+          <el-tab-pane label="数据库覆盖" name="databases" v-loading="databaseLoading">
+            <el-alert v-if="databaseError" type="warning" :closable="false" :title="databaseError" show-icon />
+            <el-empty v-else-if="databaseLoaded && !databases.length" description="未发现可展示的数据库" :image-size="64" />
+            <ProTable v-else :data="databases" :columns="databaseColumns" :show-toolbar="false" :show-operation="false" :show-pagination="false" embedded class="inner-table">
+              <template #col-size="{ row }">{{ formatBytes(row.sizeBytes) }}</template>
+              <template #col-allow="{ row }"><DictTag dict="common_boolean" :value="String(row.allowConnections)" /></template>
+              <template #col-connect="{ row }"><DictTag dict="common_boolean" :value="String(row.connectable)" /></template>
+              <template #col-scope="{ row }"><DictTag dict="common_boolean" :value="String(row.inScope)" /></template>
+            </ProTable>
+          </el-tab-pane>
+        </el-tabs>
       </el-card>
     </template>
     <!-- 健康评分弹窗 -->
@@ -135,14 +155,19 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { QuestionFilled } from '@element-plus/icons-vue'
 import { useInstanceStore } from '@/stores/instance'
 import InstanceEmpty from '@/components/InstanceEmpty.vue'
 import CapabilityBanner from '@/components/CapabilityBanner.vue'
+import StatCard from '@/components/StatCard.vue'
+import DictTag from '@/components/DictTag.vue'
+import ProTable from '@/components/ProTable/index.vue'
+import type { TableColumn } from '@/components/ProTable/types'
+import PgCollectionQualityAlert from '@/views/monitor/pg/components/PgCollectionQualityAlert.vue'
 import PgSessionPanel from '@/views/monitor/pg/realtime/components/PgSessionPanel.vue'
 import TrendChart, { type ThresholdLine, type EventMarker } from '@/components/TrendChart.vue'
 import InstanceBanner from '@/views/monitor/shared/realtime/components/InstanceBanner.vue'
-import { toggleInstance } from '@/api/instance'
+import { getInstanceCapabilities, toggleInstance, type InstanceCapability } from '@/api/instance'
+import { listPgDatabases, type PgDatabase } from '@/api/postgresql'
 import { listUserOptions } from '@/api/user'
 import { listGroupOptions } from '@/api/group'
 import {getMetricTrend, getMetricLatest, pageAlertEvents, getHealthScore} from '@/api/metric'
@@ -157,9 +182,31 @@ import HealthScoreDialog from '@/views/monitor/shared/realtime/components/Health
 const instanceStore = useInstanceStore()
 const inst = computed(() => instanceStore.current)
 
+const activeTab = ref('performance')
 const loading = ref(false)
 const showHealthDialog = ref(false)
 const healthData = ref<HealthScoreVo | null>(null)
+const capabilities = ref<InstanceCapability[]>([])
+const databases = ref<PgDatabase[]>([])
+const capabilityError = ref('')
+const databaseError = ref('')
+const capabilityLoading = ref(false)
+const capabilityLoaded = ref(false)
+const databaseLoading = ref(false)
+const databaseLoaded = ref(false)
+
+const capabilityColumns: TableColumn[] = [
+  { prop: 'name', label: '监控能力', minWidth: 220 },
+  { label: '状态', width: 120, slot: 'col-status' },
+  { label: '检测结论与建议', minWidth: 420, slot: 'col-message' }
+]
+const databaseColumns: TableColumn[] = [
+  { prop: 'name', label: '数据库', minWidth: 180 },
+  { label: '容量', width: 140, slot: 'col-size' },
+  { label: '允许连接', width: 110, slot: 'col-allow' },
+  { label: '账号可连接', width: 120, slot: 'col-connect' },
+  { label: '已纳入采集', width: 140, slot: 'col-scope' }
+]
 
 /** 复制角色：true 从库 / false 主库 / null 未知 */
 const isReplica = ref<boolean | null>(null)
@@ -214,6 +261,7 @@ const statCards = computed(() => {
   const blocked = v[PG.BLOCKED_SESSIONS]
   const tps = v[PG.TPS]
   const uptime = v[PG.UPTIME]
+  const longestTrx = v[PG.TRX_MAX_SECONDS]
   return [
     {
       label: '运行状态',
@@ -250,9 +298,30 @@ const statCards = computed(() => {
       status: blocked == null ? 'muted' : blocked > 0 ? 'warn' : 'ok',
       sub: '',
       tip: '因等锁被卡住的会话数，持续大于 0 需排查长事务'
+    },
+    {
+      label: '最长事务',
+      value: longestTrx == null ? '—' : fmtUptime(longestTrx),
+      status: longestTrx == null ? 'muted' : longestTrx >= 3600 ? 'danger' : longestTrx >= 300 ? 'warn' : 'ok',
+      sub: '',
+      tip: '长事务会阻止 VACUUM 清理旧版本行，持续增长时需定位来源会话'
     }
   ]
 })
+
+function statTone(status: string): 'success' | 'warning' | 'danger' | 'info' {
+  if (status === 'ok') return 'success'
+  if (status === 'warn') return 'warning'
+  if (status === 'danger') return 'danger'
+  return 'info'
+}
+
+function formatBytes(value: number): string {
+  if (value === 0) return '-'
+  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`
+  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`
+  return `${(value / 1024 ** 3).toFixed(2)} GB`
+}
 
 function fmtUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -346,7 +415,7 @@ async function loadLatest(instanceId: number) {
   try {
     const res = await getMetricLatest(instanceId, [
       PG.AVAILABILITY, PG.UPTIME, PG.CONN_TOTAL, PG.CONN_MAX, PG.CONN_USAGE,
-      PG.TPS, PG.CACHE_HIT_RATE, PG.BLOCKED_SESSIONS, PG.REPL_IS_REPLICA
+      PG.TPS, PG.CACHE_HIT_RATE, PG.BLOCKED_SESSIONS, PG.TRX_MAX_SECONDS, PG.REPL_IS_REPLICA
     ])
     latest.value = res.values ?? {}
     const rep = latest.value[PG.REPL_IS_REPLICA]
@@ -405,6 +474,36 @@ const groupName = computed(() => {
   return names.join(' / ') || ''
 })
 
+async function loadCapabilities(instanceId: number) {
+  capabilityLoading.value = true
+  capabilityLoaded.value = false
+  capabilityError.value = ''
+  try {
+    capabilities.value = await getInstanceCapabilities(instanceId)
+  } catch {
+    capabilities.value = []
+    capabilityError.value = '监控能力读取失败，请检查实例权限或稍后重试'
+  } finally {
+    capabilityLoaded.value = true
+    capabilityLoading.value = false
+  }
+}
+
+async function loadDatabases(instanceId: number) {
+  databaseLoading.value = true
+  databaseLoaded.value = false
+  databaseError.value = ''
+  try {
+    databases.value = await listPgDatabases(instanceId)
+  } catch {
+    databases.value = []
+    databaseError.value = '数据库覆盖读取失败，请检查实例连接和监控账号权限'
+  } finally {
+    databaseLoaded.value = true
+    databaseLoading.value = false
+  }
+}
+
 async function loadMeta() {
   const [users, groups] = await Promise.allSettled([listUserOptions(), listGroupOptions()])
   if (users.status === 'fulfilled') userOptions.value = users.value
@@ -429,9 +528,17 @@ watch(showHealthDialog, async (open) => {
 })
 
 watch(() => inst.value?.id, (id) => {
+  capabilities.value = []
+  databases.value = []
+  capabilityError.value = ''
+  databaseError.value = ''
+  capabilityLoaded.value = false
+  databaseLoaded.value = false
   if (id) {
     isReplica.value = null
     loadAll()
+    loadCapabilities(id)
+    loadDatabases(id)
   }
 }, { immediate: true })
 
@@ -446,45 +553,19 @@ loadMeta()
   gap: var(--density-gap, 16px);
   min-height: 400px;
 }
+.tab-card > :deep(.el-card__body) {
+  padding: 0 16px 16px;
+}
+.detail-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
+}
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  margin-bottom: 24px;
 }
-.stat-card {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  padding: 12px 16px;
-  background: var(--el-bg-color);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.stat-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.stat-tip {
-  color: var(--el-text-color-placeholder);
-  cursor: help;
-}
-.stat-value {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-.stat-value.ok { color: #15A36A; }
-.stat-value.warn { color: #E08600; }
-.stat-value.danger { color: #E5484D; }
-.stat-value.muted { color: var(--el-text-color-secondary); }
-.stat-sub {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-.chart-card > :deep(.el-card__body) {
+.chart-content {
   display: flex;
   flex-direction: column;
   gap: 24px;

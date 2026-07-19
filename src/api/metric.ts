@@ -53,7 +53,9 @@ export function getMetricTrend(
   }).then(res => ({ ...res, points: roundPoints(res.points, decimals) }))
 }
 
-/** 性能分析多指标趋势批量查询（1h 频率为小时级降采样视图，from/to 毫秒时间戳；decimals 控制小数位，0 为取整） */
+const PERF_TREND_BATCH_SIZE = 40
+
+/** 性能分析多指标趋势批量查询（自动按后端 40 个指标的上限分批；1h 频率为小时级降采样视图，from/to 毫秒时间戳；decimals 控制小数位，0 为取整） */
 export function getPerfTrendBatch(data: {
   instanceId: number
   metricCodes: string[]
@@ -61,13 +63,20 @@ export function getPerfTrendBatch(data: {
   to: number
   frequency: '1m' | '1h'
 }, decimals = 2) {
-  return request<PerfTrendBatchVo>({
+  const batches: string[][] = []
+  for (let i = 0; i < data.metricCodes.length; i += PERF_TREND_BATCH_SIZE) {
+    batches.push(data.metricCodes.slice(i, i + PERF_TREND_BATCH_SIZE))
+  }
+
+  return Promise.all(batches.map(metricCodes => request<PerfTrendBatchVo>({
     url: '/v1/metrics/perf/trend-batch',
     method: 'post',
-    data
-  }).then(res => ({
-    ...res,
-    series: (res.series ?? []).map(s => ({ ...s, points: roundPoints(s.points, decimals) }))
+    data: { ...data, metricCodes }
+  }))).then(results => ({
+    instanceId: data.instanceId,
+    frequency: data.frequency,
+    series: results.flatMap(res => res.series ?? [])
+      .map(s => ({ ...s, points: roundPoints(s.points, decimals) }))
   }))
 }
 

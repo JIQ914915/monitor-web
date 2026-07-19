@@ -12,7 +12,7 @@
       <div class="score-grid">
         <div class="score-left">
           <div class="score-top">
-            <HealthGauge :value="Math.max(0, data.score)" :size="96" :stroke="9" />
+            <HealthGauge :value="data.score >= 0 ? data.score : Number.NaN" :size="96" :stroke="9" />
             <div class="score-meta">
               <span class="score-num">{{ data.score >= 0 ? data.score : '—' }}</span>
               <DictTag dict="health_level" :value="data.level" />
@@ -22,12 +22,8 @@
           <div class="dims">
             <div v-for="d in data.dimensions" :key="d.dimension" class="dim-row">
               <span class="dim-name">{{ d.label }}</span>
-              <el-progress
-                :percentage="d.score < 0 ? 0 : d.score"
-                :color="progressColor(d.score / 100)"
-                :stroke-width="8"
-                class="dim-bar"
-              />
+              <el-progress v-if="d.score >= 0" :percentage="d.score" :color="progressColor(d.score / 100)" :stroke-width="8" class="dim-bar" />
+              <span v-else class="dim-empty">暂无数据</span>
             </div>
           </div>
         </div>
@@ -38,7 +34,7 @@
       <!-- 扣分明细 -->
       <div class="deductions">
         <div class="section-title">扣分明细</div>
-        <el-empty v-if="!data.deductions.length" description="各维度正常，无扣分项" :image-size="60" />
+        <el-empty v-if="!data.deductions.length" :description="deductionEmptyText" :image-size="60" />
         <div v-else class="deduct-list">
           <div v-for="(d, i) in data.deductions" :key="i" class="deduct-item">
             <div class="deduct-left">
@@ -57,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import * as echarts from 'echarts/core'
 import { RadarChart } from 'echarts/charts'
 import { RadarComponent, TooltipComponent } from 'echarts/components'
@@ -80,6 +76,11 @@ const emit = defineEmits<{
 
 const visible = ref(props.modelValue)
 const radarRef = ref<HTMLDivElement>()
+const scoredDimensions = computed(() => props.data?.dimensions.filter(d => d.score >= 0) ?? [])
+const hasMissingDimensions = computed(() => props.data?.dimensions.some(d => d.score < 0) ?? false)
+const deductionEmptyText = computed(() => hasMissingDimensions.value
+  ? '已评分维度暂无扣分项，部分维度等待采集'
+  : '各维度正常，无扣分项')
 
 watch(() => props.modelValue, v => { visible.value = v })
 watch(visible, v => emit('update:modelValue', v))
@@ -90,7 +91,7 @@ function buildRadarOption() {
   return {
     tooltip: { trigger: 'item' },
     radar: {
-      indicator: data.dimensions.map(d => ({ name: d.label, max: 100 })),
+      indicator: scoredDimensions.value.map(d => ({ name: d.label, max: 100 })),
       radius: '65%',
       axisName: { color: '#6B7280', fontSize: 12 },
       splitLine: { lineStyle: { color: '#F3F4F6' } },
@@ -99,7 +100,7 @@ function buildRadarOption() {
     series: [{
       type: 'radar',
       data: [{
-        value: data.dimensions.map(d => Math.max(0, d.score)),
+        value: scoredDimensions.value.map(d => d.score),
         name: '健康得分',
         lineStyle: { color: '#0C7C97', width: 2 },
         areaStyle: { color: '#0C7C9730' },
@@ -190,6 +191,10 @@ function progressColor(ratio: number) {
 }
 .dim-bar {
   flex: 1;
+}
+.dim-empty {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
 }
 .radar-chart {
   height: 220px;

@@ -84,6 +84,13 @@ export const PG = {
   WAL_ARCHIVED_DELTA:      'pg.wal.archived_delta',
   WAL_ARCHIVE_FAILED:      'pg.wal.archive_failed_delta',
 
+  // ── 统计基线质量（P0） ─────────────────────────────────────────────────
+  STATS_DATABASE_RESET_AGE_SECONDS: 'pg.stats.database_reset_age_seconds',
+  STATS_WAL_RESET_AGE_SECONDS:      'pg.stats.wal_reset_age_seconds',
+  STATS_IO_RESET_AGE_SECONDS:       'pg.stats.io_reset_age_seconds',
+  STATEMENTS_RESET_AGE_SECONDS:     'pg.statements.reset_age_seconds',
+  STATEMENTS_DEALLOC_DELTA:         'pg.statements.dealloc_delta',
+
   // ── 复制槽（分钟级，二期 C7） ───────────────────────────────────────────
   REPL_SLOTS_TOTAL:        'pg.repl.slots_total',
   REPL_SLOTS_INACTIVE:     'pg.repl.slots_inactive',

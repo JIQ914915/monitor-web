@@ -10,7 +10,7 @@
         :owner-a-name="ownerAName"
         :owner-b-name="ownerBName"
         :group-name="groupName"
-        :health-score="healthData && healthData.score >= 0 ? healthData.score : undefined"
+        :health-score="healthData?.score"
         @open-health="showHealthDialog = true"
         @toggle="handleToggle"
       />

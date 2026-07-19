@@ -114,6 +114,29 @@ export interface PgQueryAnalytics {
   firstSeen?: string
   lastSeen?: string
   statsReset?: string
+  deallocations: number
+}
+
+export type PgCollectionQualityScope = 'realtime' | 'query' | 'replication' | 'backups' | 'progress'
+
+export interface PgCollectItemStatus {
+  frequency: string
+  itemCode: string
+  status: string
+  reason: string
+  durationMs: number
+  rowCount: number
+  consecutiveFailures: number
+  lastSuccessAt?: string
+  collectedAt: string
+}
+
+export function listPgCollectionQuality(scope: PgCollectionQualityScope, instanceId: number) {
+  return request<PgCollectItemStatus[]>({
+    url: `/v1/postgresql/collection-quality/${scope}`,
+    method: 'post',
+    data: { id: instanceId }
+  })
 }
 
 export interface PgSqlRegression {

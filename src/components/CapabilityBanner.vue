@@ -31,10 +31,10 @@ const caps = ref<InstanceCapability[]>([])
 
 const abnormal = computed(() => caps.value.filter(c => c.status !== 'available'))
 
-/** 横幅级别取最严重项：采集异常 → error；受限/数据不足 → warning；其余 → info */
+/** 横幅级别取最严重项：采集异常 → error；受限/未启用/数据不足 → warning；其余 → info */
 const alertType = computed<'error' | 'warning' | 'info'>(() => {
   if (abnormal.value.some(c => c.status === 'collect_error' || c.status === 'permission_denied')) return 'error'
-  if (abnormal.value.some(c => c.status === 'limited' || c.status === 'no_data')) return 'warning'
+  if (abnormal.value.some(c => c.status === 'limited' || c.status === 'not_enabled' || c.status === 'no_data')) return 'warning'
   return 'info'
 })
 

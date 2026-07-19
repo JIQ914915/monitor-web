@@ -1,6 +1,13 @@
 <template>
   <div class="pg-operations-panel">
     <CapabilityBanner :instance-id="id" />
+    <PgCollectionQualityAlert
+      v-if="kind !== 'timeline'"
+      :instance-id="id"
+      :scope="qualityScope"
+      :item-codes="['pg_operations']"
+      @quality-change="quality = $event"
+    />
     <div class="panel-intro">
       <div>
         <div class="panel-title">{{ title }}</div>
@@ -76,6 +83,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import PgCollectionQualityAlert from './PgCollectionQualityAlert.vue'
+import type { PgCollectionQualitySummary } from './PgCollectionQualityAlert.vue'
+import type { PgCollectionQualityScope } from '@/api/postgresql'
+import { useDict } from '@/composables/useDict'
 import { useInstanceStore } from '@/stores/instance'
 import { getPgOperationalHealth, listPgOperationalEvents } from '@/api/postgresql'
 import type { PgOperationKind, PgOperationalEvent, PgOperationalHealth } from '@/api/postgresql'
@@ -91,6 +102,7 @@ const loading=ref(false),healthLoading=ref(false)
 const rows=ref<PgOperationalEvent[]>([]),health=ref<PgOperationalHealth>(),total=ref(0)
 const pagination=reactive({pageNum:1,pageSize:20})
 const filters=reactive({sqlState:'',database:'',user:'',keyword:'',range:[new Date(Date.now()-7*86400000),new Date()] as [Date,Date]})
+const quality=ref<PgCollectionQualitySummary>({loaded:false,hasData:false})
 const detailVisible=ref(false),selected=ref<PgOperationalEvent>()
 const columns:TableColumn[]=[
   {prop:'eventTime',label:'时间',width:180},{label:'状态',width:100,slot:'col-severity'},
@@ -105,7 +117,19 @@ const riskColumns:TableColumn[]=[
   {prop:'eventCount',label:'事件数',width:85},{prop:'fingerprintCount',label:'对象数',width:85}
 ]
 const guidance=computed(()=>props.kind==='progress'?'优先关注“关注/告警”任务，可打开详情查看停滞状态和阻塞 PID。':props.kind==='backups'?'WAL 归档正常不代表可恢复，请结合恢复演练验证结果判断。':'默认展示最近七天证据；内容已经截断并脱敏。')
-const emptyDescription=computed(()=>props.kind==='progress'?'当前没有运行中的运维任务，数据库运行不受影响。':'暂无需要展示的原生运维事件，数据库当前未发现相关风险。')
+const qualityScope=computed<PgCollectionQualityScope>(()=>props.kind==='backups'?'backups':props.kind==='progress'?'progress':'replication')
+const {getDictLabel}=useDict('pg_collect_item_status','pg_collect_failure_reason')
+const emptyDescription=computed(()=>{
+  if(props.kind!=='timeline'){
+    if(quality.value.loaded&&!quality.value.hasData)return '尚未产生运维快照采集状态，请等待下一次分钟级采集。'
+    if(quality.value.status&&quality.value.status!=='success'){
+      const status=getDictLabel('pg_collect_item_status',quality.value.status)
+      const reason=getDictLabel('pg_collect_failure_reason',quality.value.reason)
+      return `运维快照采集${status}：${reason}，当前无法判断是否存在相关任务或风险。`
+    }
+  }
+  return props.kind==='progress'?'当前没有运行中的运维任务，数据库运行不受影响。':'暂无需要展示的原生运维事件，数据库当前未发现相关风险。'
+})
 async function load(){
   if(!id.value)return
   loading.value=true

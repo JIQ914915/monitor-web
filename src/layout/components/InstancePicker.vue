@@ -75,17 +75,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { Search, Folder, Clock, Star, StarFilled, Coin } from '@element-plus/icons-vue'
 import HealthGauge from '@/components/HealthGauge.vue'
 import { useAppStore } from '@/stores/app'
 import { useInstanceStore } from '@/stores/instance'
+import { useTagsViewStore } from '@/stores/tagsView'
 import { listAllInstances } from '@/api/instance'
 import { listGroups } from '@/api/group'
 import type { DbInstance, InstanceGroup } from '@/types'
 
 const app = useAppStore()
+const router = useRouter()
 const instanceStore = useInstanceStore()
+const tagsStore = useTagsViewStore()
 
 const visible = computed({
   get: () => app.pickerVisible,
@@ -149,9 +153,15 @@ function onOpen() {
   loadData()
 }
 
-function choose(inst: DbInstance) {
-  instanceStore.setCurrent(inst)
+async function choose(inst: DbInstance) {
   app.closePicker()
+  if (current.value?.id === inst.id) return
+
+  // 先卸载旧实例页面，再更新实例上下文，避免页面监听 current.id 后请求新实例数据。
+  tagsStore.closeInstanceScoped()
+  await router.replace('/dashboard')
+  await nextTick()
+  instanceStore.setCurrent(inst)
 }
 
 function handleGlobalOpen() {
